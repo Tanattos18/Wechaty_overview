@@ -60,6 +60,10 @@ const REF_RE = /\b(ela|ele|essa|esse|dessa|desse|nessa|nesse|dela|dele|essa ai|e
 const REF_ORDER_RE = /\b(quero|queria|vou querer|manda|pode ser|me ve|anota|coloca|adiciona)\s+(a |o )?(essa|esse|ela|ele|essa ai|esse ai|dessa|desse|promocao|promo|combo)\b/
 /** "mais uma", "mais 2", "outra dessa". */
 const MORE_RE = /\b(?:mais|\+)\s*(\d{1,2}|uma|um|duas|dois|tres)\b(?!\s+(?:de|do|da)\b)|\b(?:outra|outro) (?:dessa|desse|igual)\b/
+/** "só tem essa?", "mais alguma promoção?" — depois de mostrar a promoção. */
+const ONLY_THIS_RE = /\b(so|somente|apenas) (tem )?(essa|esse|essas|esses|ela|uma|isso)\b|\b(mais|outra|outras) (alguma )?promoc/
+/** Parece endereço: número ou palavra de logradouro. */
+const ADDRESS_RE = /\d|\b(rua|r|av|avenida|travessa|tv|alameda|estrada|rodovia|praca|quadra|qd|lote|lt|bairro|condominio|cond|apto|apartamento|ap|casa|bloco|km|setor|vila|jardim|centro|perto|proximo|esquina|residencial|loteamento|chacara|sitio|fazenda)\b/
 const PROMO_RE = /\b(promocao|promocoes|promo|combo|oferta)\b/
 const HALF_RE = /\b(meio a meio|metade|meia|meio)\b/
 const INFO_INTENTS: Intent[] = ['hours', 'address', 'phone', 'delivery', 'payment']
@@ -224,8 +228,18 @@ export class Engine {
 
     switch (conv.state) {
       case 'checkout_name': {
-        // "sim" confirma o nome do WhatsApp; qualquer outra resposta é o nome a usar
-        conv.checkout.name = YES.has(bare) && conv.name
+        // "sim" / "sim, pode ser" confirma o nome do WhatsApp; "não" pergunta o nome; o resto é o nome a usar
+        const confirms = YES.has(bare) || (/^(sim|pode|isso|ok|claro|certo|correto|ta certo|esta certo|beleza|perfeito)\b/.test(bare) &&
+          !/\bnao\b/.test(bare) && bare.split(' ').length <= 5)
+        if (NO.has(bare)) return ['Tudo bem! Qual nome eu coloco no pedido? 😊']
+        // Mandou o endereço direto ("rua das flores 120"): fica o nome do WhatsApp e segue
+        if (/\d/.test(bare) && ADDRESS_RE.test(bare) && conv.name) {
+          conv.checkout.name = conv.name.slice(0, 80)
+          conv.checkout.address = text.slice(0, 300)
+          conv.state = 'checkout_confirm'
+          return [`Confere pra mim, por favor:\n\n${this.orderSummary(conv)}\n\nPosso confirmar? (responda *sim* ou *cancelar*)`]
+        }
+        conv.checkout.name = confirms && conv.name
           ? conv.name.slice(0, 80)
           : text.replace(/^(meu nome (e|é)|me chamo|sou o|sou a|e|é|nao,?|não,?)\s+/i, '').slice(0, 80)
         conv.state = 'checkout_address'
@@ -234,7 +248,27 @@ export class Engine {
       }
 
       case 'checkout_address':
-        conv.checkout.address = PICKUP_RE.test(bare) && bare.split(' ').length <= 4 ? 'Retirada no local' : text.slice(0, 300)
+        // Corrigindo o nome ("não é esse nome", "meu nome é Ana")
+        if (/\bnome\b/.test(bare)) {
+          const name = /\b(?:meu nome (?:e|é)|me chamo|nome (?:e|é))\s+(.+)$/i.exec(text)?.[1]?.trim()
+          if (!name) {
+            conv.state = 'checkout_name'
+            return ['Desculpa a confusão! 😅 Qual nome eu coloco no pedido?']
+          }
+          conv.checkout.name = name.slice(0, 80)
+          return [`Anotado, ${firstName(conv)}! 😊 E qual o endereço de entrega? Se preferir retirar aqui, é só dizer *retirar*.`]
+        }
+        if (PICKUP_RE.test(bare) && bare.split(' ').length <= 4) {
+          conv.checkout.address = 'Retirada no local'
+        } else {
+          // Não parece endereço ("sim", "ok", uma frase solta): pede de novo (aceita na 3ª tentativa)
+          const tries = conv.checkout.addressTries ?? 0
+          if (!ADDRESS_RE.test(bare) && tries < 2) {
+            conv.checkout.addressTries = tries + 1
+            return ['Não consegui entender o endereço 😅 Me manda a *rua, número e bairro* — ou *retirar*, se preferir buscar aqui.']
+          }
+          conv.checkout.address = text.slice(0, 300)
+        }
         conv.state = 'checkout_confirm'
         return [`Confere pra mim, por favor:\n\n${this.orderSummary(conv)}\n\nPosso confirmar? (responda *sim* ou *cancelar*)`]
 
@@ -347,6 +381,11 @@ export class Engine {
     const match = findProduct(products, n)
     const wantsOthers = OTHER_OPTIONS_RE.test(n)
 
+    // Logo depois de mostrar a promoção: "teria outras?", "só tem essa?" falam da promoção, não do cardápio
+    if (this.recentTopic(conv) === 'promocoes' && !REF_ORDER_RE.test(n) && (wantsOthers || ONLY_THIS_RE.test(n) || (PROMO_RE.test(n) && !has('order')))) {
+      return { replies: [this.onlyThisPromo(tenant, conv)] }
+    }
+
     // Memória curta: "quero essa", "quero ela também", "mais uma", "quanto custa ela?"
     // (o último produto citado — inclusive a promoção que acabou de ser apresentada)
     const promo = promoProduct(products)
@@ -442,8 +481,31 @@ export class Engine {
     return { missingTopic }
   }
 
+  /** Assunto respondido na mensagem anterior do cliente (undefined se a conversa já seguiu). */
+  private recentTopic (conv: Conversation): string | undefined {
+    const t = conv.lastTopic
+    if (!t) return undefined
+    const customerSince = conv.messages.slice(t.at).filter(m => m.from === 'customer').length
+    return customerSince <= 1 ? t.key : undefined
+  }
+
+  private onlyThisPromo (tenant: TenantConfig, conv: Conversation): string {
+    conv.lastTopic = { key: 'promocoes', at: conv.messages.length }
+    conv.lastKind = 'kb'
+    const promo = promoProduct(this.activeProducts(tenant))
+    if (promo) {
+      conv.lastProduct = promo.id
+      conv.offer = promo.id
+      return `No momento a promoção é só essa mesmo 😊 A *${promo.name}* sai por *${priceLabel(promo)}*.
+
+Quer que eu já anote pra você?`
+    }
+    return 'No momento a promoção é só essa mesmo 😊 Se quiser aproveitar, é só me dizer o sabor da pizza que eu anoto!'
+  }
+
   private knowledgeReply (tenant: TenantConfig, conv: Conversation, kb: Extract<KbResult, { status: 'answer' }>): Understood {
     conv.lastKind = 'kb'
+    conv.lastTopic = { key: kb.topic, at: conv.messages.length }
     // Depois de apresentar a promoção, "quero essa" se refere ao combo cadastrado
     if (kb.topic === 'promocoes') {
       const promo = promoProduct(this.activeProducts(tenant))
@@ -483,6 +545,7 @@ export class Engine {
   private describeProduct (p: Product, conv: Conversation, n: string): string {
     conv.offer = p.id
     conv.lastProduct = p.id
+    if (promoProduct([p])) conv.lastTopic = { key: 'promocoes', at: conv.messages.length }
     const size = matchSize(p, n)
     const price = size
       ? `*${p.name}* (${size.name}) sai por *${formatPrice(size.price)}*`
@@ -932,7 +995,7 @@ export class Engine {
 }
 
 const QTY_WORD = '\\d{1,2}|um|uma|dois|duas|tres|quatro|cinco|seis|sete|oito|nove|dez'
-const ORDER_FILLER_RE = /\b(quero|queria|vou querer|gostaria de|gostaria|me ve|me manda|manda|pode ser|me traz|traz|coloca|adiciona|anota|tambem|numero|num|item|opcao|por favor|pfv|pf|isso)\b/g
+const ORDER_FILLER_RE = /\b(ta|ok|okay|beleza|blz|entao|certo|hmm|hum|tudo bem|bom|quero|queria|vou querer|gostaria de|gostaria|me ve|me manda|manda|pode ser|me traz|traz|coloca|adiciona|anota|tambem|numero|num|item|opcao|por favor|pfv|pf|isso)\b/g
 const ARTICLE_RE = /(^|\s)(a|o|as|os|n|no|nº)(?=\s|$)/g
 
 /**
@@ -954,7 +1017,7 @@ const clampQty = (q: number) => Math.max(1, Math.min(99, q || 1))
 
 /** Separa os itens e também números soltos por espaço: "1 2 e 4" -> ["1", "2", "4"]. */
 function orderChunks (n: string): string[] {
-  return splitItems(n.replace(/[!.?]+$/, '')).flatMap(c => {
+  return splitItems(n.replace(/[!?]+|\.{2,}|\.\s/g, ' ').replace(/[.\s]+$/, '')).flatMap(c => {
     const nums = c.replace(ORDER_FILLER_RE, ' ').replace(ARTICLE_RE, ' ').trim()
     return /^(\d{1,2}\s+)+\d{1,2}$/.test(nums) ? nums.split(/\s+/) : [c]
   })

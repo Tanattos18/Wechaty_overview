@@ -146,7 +146,7 @@ export interface Conversation {
   channel: Channel
   state: ChatState
   cart: CartItem[]
-  checkout: { name?: string; address?: string }
+  checkout: { name?: string; address?: string; addressTries?: number }
   humanSince?: string
   needsAgent: boolean
   /** Mensagens seguidas que o bot não entendeu. */
@@ -155,6 +155,8 @@ export interface Conversation {
   offer?: string
   /** Último produto citado, para entender "quanto custa ela?", "quero mais uma". */
   lastProduct?: string
+  /** Assunto da base de conhecimento respondido por último e em que mensagem ("só tem essa promoção?"). */
+  lastTopic?: { key: string; at: number }
   /** "Você quis dizer…?": opções oferecidas e a frase original (aprendida quando o cliente escolhe). */
   choice?: { text: string; options: { key: string; title: string }[] }
   /** Itens esperando o cliente escolher o tamanho. */

@@ -230,3 +230,36 @@ describe('IA (OpenRouter)', () => {
     assert.match(p, /\[ATENDENTE\]/)
   })
 })
+
+describe('Simulação real: promoção, "quero a 1 e a 4" e fechamento', () => {
+  for (const withCombo of [true, false]) {
+    it(withCombo ? 'com o combo cadastrado' : 'sem produto de promoção', async () => {
+      const tenant = demo()
+      if (!withCombo) tenant.products = tenant.products.filter(p => p.id !== 'p5')
+      const t = setup(tenant)
+      await t.say('oi')
+      await t.say('o que vc vende')
+      await t.say('tem promoção ?')
+      assert.match(await t.say('teria outras ou so essas ?'), /promoção é só essa/)
+      assert.match(await t.say('to falando de promoção, so tem essa que me mostrou'), /promoção é só essa/)
+      assert.match(await t.say('?? ta.. quero a 1 e a 4'), /1x Pizza Margherita, 1x Refrigerante 2L/)
+      await t.say('quais as formas de pagameto.')
+      assert.match(await t.say('não'), /no nome de \*Maria\*/)
+      assert.match(await t.say('sim pode ser'), /Prazer, Maria!/)
+      assert.match(await t.say('ok'), /Não consegui entender o endereço/)
+      const summary = await t.say('rua das flores 120, centro')
+      assert.match(summary, /Nome: Maria/)
+      assert.match(summary, /Entrega: rua das flores 120, centro/)
+    })
+  }
+
+  it('"não é esse nome" no endereço volta para o nome; endereço no lugar do nome segue com o do WhatsApp', async () => {
+    const t = setup()
+    await t.say('oi')
+    await t.say('quero 1 calabresa')
+    await t.say('finalizar')
+    await t.say('sim')
+    assert.match(await t.say('sim não e um nome'), /Qual nome eu coloco/)
+    assert.match(await t.say('rua das flores 120'), /Nome: Maria/)
+  })
+})
