@@ -81,7 +81,7 @@ describe('Conversa natural (sem IA)', () => {
 
   it('exemplo do catálogo usa o nome que diferencia o produto', async () => {
     await t.say('oi')
-    assert.match(await t.say('quais os preços?'), /quero 2 margherita/)
+    assert.match(await t.say('quais os preços?'), /\*2 margherita\*/)
   })
 
   it('responde saudação + pergunta na mesma mensagem', async () => {

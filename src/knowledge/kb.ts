@@ -77,8 +77,14 @@ const ABBREVIATIONS: Record<string, string> = {
 /** Palavras que não ajudam a diferenciar assuntos (artigos, preposições, cortesia). */
 const LIGHT_STOPWORDS = new Set((
   'a o as os um uma uns umas de da do das dos e em no na nos nas para por pelo pela com que ao aos ' +
-  'me te se lhe eu ele ela isso esse essa ai la aqui favor pf pfv por ola oi bom boa dia tarde noite ok'
+  'me te se lhe eu ele ela isso esse essa este esta isto aquele aquela aquilo ai la aqui favor pf pfv por ola oi bom boa dia tarde noite ok'
 ).split(' '))
+
+/** Palavras que aparecem em perguntas de todo tipo: sozinhas, não escolhem um assunto. */
+const GENERIC_WORDS = new Set((
+  'quero queria gostaria preciso pode poderia tem tenho ter voce voces sabe saber faz fazer ser esta estao estou ' +
+  'como qual quais quanto onde quando porque mais meu minha seu sua algum alguma coisa ver sim nao'
+).split(' ').map(stem))
 
 function normalizeText (text: string): string {
   return text.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
@@ -95,7 +101,8 @@ export function kbTokens (text: string): string[] {
   const out = new Set<string>()
   for (const raw of normalizeText(text).split(' ')) {
     const w = ABBREVIATIONS[raw] ?? raw
-    if (!w || LIGHT_STOPWORDS.has(w)) continue
+    // Um dígito sozinho ("quero a 1") não diferencia assuntos e confundia com datas ("dia 1 de janeiro")
+    if (!w || LIGHT_STOPWORDS.has(w) || /^\d$/.test(w)) continue
     out.add(stem(w))
   }
   return [...out]
@@ -358,7 +365,8 @@ export class KnowledgeBase {
     const knowledge = tenantKnowledge(tenant)
     if (knowledge.packs.length === 0) return undefined
     const msg = kbTokens(text)
-    if (msg.length === 0) return undefined
+    // Só palavras genéricas ("quero", "pode", "como"...) não indicam assunto nenhum
+    if (msg.length === 0 || msg.every(t => GENERIC_WORDS.has(t))) return undefined
     const norm = normalizeText(text)
 
     // Nota do assunto = 60% a pergunta mais parecida + 40% o vocabulário do assunto todo

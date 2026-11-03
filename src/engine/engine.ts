@@ -148,6 +148,17 @@ export class Engine {
       return [hadOrder ? `${this.pick(PHRASES.cancelled)} ${this.pick(PHRASES.followUp)}` : `Tudo bem! ${this.pick(PHRASES.howCanIHelp)}`]
     }
 
+    // Só pontuação ou emoji ("?", "👍"): responde conforme o momento da conversa
+    if (!/[a-z0-9]/.test(bare)) {
+      if (/👍|👌|🙏|❤|😊|🙂|😉/u.test(text)) return ['😊 Qualquer coisa, é só chamar!']
+      if (conv.state === 'checkout_name') return ['Pra finalizar, me diz o seu nome? 😊']
+      if (conv.state === 'checkout_address') return ['Qual o endereço de entrega? Se preferir retirar aqui, é só dizer *retirar*.']
+      if (conv.state === 'checkout_confirm') return ['É só me responder *sim* pra confirmar ou *cancelar* se quiser desistir. 😊']
+      if (conv.state === 'catalog' && conv.cart.length > 0) return [`Ficou alguma dúvida? 😊\n\n${this.cartText(conv)}`]
+      if (conv.state === 'catalog') return [this.orderHelp(tenant)]
+      return [`Pode me dizer como posso te ajudar? 😊\n\n${this.capabilities(tenant)}`]
+    }
+
     switch (conv.state) {
       case 'checkout_name': {
         conv.checkout.name = text.replace(/^(meu nome e|me chamo|sou o|sou a|e)\s+/i, '').slice(0, 80)
@@ -170,7 +181,7 @@ export class Engine {
         return ['É só me responder *sim* pra confirmar ou *cancelar* se quiser desistir. 😊']
 
       case 'catalog': {
-        const reply = this.handleCatalog(tenant, conv, bare)
+        const reply = this.handleCatalog(tenant, conv, bare, n)
         if (reply) return [reply]
         break
       }
@@ -255,8 +266,9 @@ export class Engine {
     const products = this.activeProducts(tenant)
     const match = findProduct(products, n)
     const wantsToOrder = has('order') && !isQuestion
+    const catalogOnScreen = conv.state === 'catalog' || lastBotWasCatalog(conv)
     if (wantsToOrder || (conv.state === 'catalog' && match.kind === 'one' && !isQuestion && !asksInfo)) {
-      const reply = this.addItemsByName(tenant, conv, n)
+      const reply = this.addItemsByName(tenant, conv, n, catalogOnScreen)
       if (reply) return { replies: [reply] }
     }
     if (match.kind === 'one' && !asksInfo && !wantsToOrder) {
@@ -275,6 +287,8 @@ export class Engine {
 
     if (wantsToOrder || has('catalog') || (has('price') && !asksInfo) || (has('order') && isQuestion && !asksInfo)) {
       conv.state = 'catalog'
+      // O catálogo acabou de ser enviado: em vez de repetir a lista, explica como pedir
+      if (wantsToOrder && lastBotWasCatalog(conv)) return { replies: [this.orderHelp(tenant)] }
       return { replies: [this.pick(PHRASES.catalogIntro), this.catalogText(tenant, conv)] }
     }
 
@@ -390,12 +404,13 @@ export class Engine {
       '',
       ...lines,
       '',
-      `Pra pedir, é só me dizer o que você quer, por exemplo: *quero 2 ${shortName(products[0], products)}* (ou mande o número).`,
+      `Pra pedir, me diga o *número* ou o *nome*. Ex.: *1 e ${Math.min(products.length, 4)}* ou *2 ${shortName(products[0], products)}*` +
+        (products.length > 1 ? ` e *1 ${shortName(products.at(-1)!, products)}*.` : '.'),
     ].join('\n')
   }
 
   /** Retorna a resposta, ou undefined se a mensagem não é um comando do catálogo. */
-  private handleCatalog (tenant: TenantConfig, conv: Conversation, n: string): string | undefined {
+  private handleCatalog (tenant: TenantConfig, conv: Conversation, n: string, raw = n): string | undefined {
     if (/^(carrinho|meu pedido|pedido|ver carrinho|ver pedido)$/.test(n)) return this.cartText(conv)
     if (n === 'catalogo' || n === 'cardapio') return this.catalogText(tenant, conv)
     if (FINISH_RE.test(n) || (NO.has(n) && conv.cart.length > 0)) {
@@ -403,13 +418,22 @@ export class Engine {
       conv.state = 'checkout_name'
       return this.pick(PHRASES.askName)
     }
-    const m = /^(\d{1,3})(?:\s*[x*]\s*(\d{1,3}))?$/.exec(n)
-    if (!m) return undefined
-    const product = this.activeProducts(tenant)[Number(m[1]) - 1]
-    if (!product) return `Hmm, não achei o item *${m[1]}*. Pode conferir o número na lista? 😊`
-    const qty = Math.max(1, Math.min(99, Number(m[2] ?? 1)))
-    this.addToCart(conv, product, qty)
-    return `${this.pick(PHRASES.added)} ${qty}x ${product.name}.\n\n${this.cartText(conv)}`
+    // Com o catálogo na tela, números se referem aos itens da lista: "1 e 4", "quero a 2", "duas da 3".
+    // Nomes de produto seguem pelo fluxo normal, que separa pedido de pergunta ("a calabresa é apimentada?").
+    // (usa o texto com vírgulas: "1, 2 e 3")
+    const chunks = orderChunks(raw)
+    const onlyNumbers = chunks.length > 0 && chunks.every(c => numberedItem(c))
+    const eachOne = new RegExp(`\\b(${QTY_WORD})\\s+de\\s+cada\\b`).test(n) && !QUESTION_RE.test(raw)
+    return onlyNumbers || eachOne ? this.addItemsByName(tenant, conv, raw, true) : undefined
+  }
+
+  /** Ajuda curta quando o cliente quer pedir mas não deu para entender os itens. */
+  private orderHelp (tenant: TenantConfig): string {
+    const products = this.activeProducts(tenant)
+    const a = products[0] ? shortName(products[0], products) : 'calabresa'
+    const b = products.at(-1) && products.length > 1 ? shortName(products.at(-1)!, products) : a
+    return 'Não consegui identificar os itens 😅 Me diga o *número* ou o *nome* do que você quer, por exemplo: ' +
+      `*1 e ${Math.min(products.length, 4) || 2}* ou *2 ${a} e 1 ${b}*.`
   }
 
   private addToCart (conv: Conversation, product: Product, qty: number): void {
@@ -419,16 +443,39 @@ export class Engine {
   }
 
   /**
-   * Pedido escrito: "quero 2 calabresa e 1 refrigerante".
+   * Pedido escrito: "quero 2 calabresa e 1 refrigerante", "uma de cada" e,
+   * com o catálogo na tela (byNumber), pelos números da lista: "1 e 4", "quero a 2", "duas da 3", "1x2".
    * Retorna undefined quando nenhum produto foi reconhecido.
    */
-  private addItemsByName (tenant: TenantConfig, conv: Conversation, n: string): string | undefined {
+  private addItemsByName (tenant: TenantConfig, conv: Conversation, n: string, byNumber = false): string | undefined {
     const products = this.activeProducts(tenant)
     const added: string[] = []
     const ambiguous: Product[][] = []
+    const invalid: string[] = []
     let last: Product | undefined
 
-    for (const chunk of splitItems(n)) {
+    // "uma de cada" / "duas de cada": todos os itens do grupo principal (ex.: as pizzas)
+    const each = new RegExp(`\\b(${QTY_WORD})\\s+de\\s+cada\\b`).exec(n)
+    if (each && products.length > 0) {
+      const qty = parseQuantity(each[1])
+      for (const p of mainGroup(products)) {
+        this.addToCart(conv, p, qty)
+        added.push(`${qty}x ${p.name}`)
+      }
+      conv.state = 'catalog'
+      return `${this.pick(PHRASES.added)} ${added.join(', ')}.\n\n${this.cartText(conv)}`
+    }
+
+    for (const chunk of byNumber ? orderChunks(n) : splitItems(n)) {
+      const numbered = byNumber ? numberedItem(chunk) : undefined
+      if (numbered) {
+        const product = products[numbered.index - 1]
+        if (!product) { invalid.push(String(numbered.index)); continue }
+        this.addToCart(conv, product, numbered.qty)
+        added.push(`${numbered.qty}x ${product.name}`)
+        last = product
+        continue
+      }
       const match = findProduct(products, chunk)
       if (match.kind === 'many') { ambiguous.push(match.products); continue }
       if (match.kind !== 'one') continue
@@ -441,11 +488,15 @@ export class Engine {
       last = match.product
     }
 
+    const notFound = invalid.length
+      ? `Não achei o item *${invalid.join('*, *')}* na lista (vai de 1 a ${products.length}).`
+      : ''
     if (added.length > 0) {
       conv.state = 'catalog'
       const doubt = ambiguous.length ? `\n\nSó não entendi qual destes você quer: ${this.listOptions(ambiguous[0], products)}` : ''
-      return `${this.pick(PHRASES.added)} ${added.join(', ')}.${doubt}\n\n${this.cartText(conv)}`
+      return `${this.pick(PHRASES.added)} ${added.join(', ')}.${notFound ? `\n${notFound}` : ''}${doubt}\n\n${this.cartText(conv)}`
     }
+    if (notFound) return `Hmm, ${notFound.charAt(0).toLowerCase()}${notFound.slice(1)} Pode conferir o número? 😊`
     if (ambiguous.length > 0) {
       conv.state = 'catalog'
       return `Temos algumas opções: ${this.listOptions(ambiguous[0], products)}\n\nQual delas você prefere?`
@@ -490,6 +541,55 @@ export class Engine {
     this.deps.onOrder?.(tenant.id, order.id)
     return reply
   }
+}
+
+const QTY_WORD = '\\d{1,2}|um|uma|dois|duas|tres|quatro|cinco|seis|sete|oito|nove|dez'
+const ORDER_FILLER_RE = /\b(quero|queria|vou querer|gostaria de|gostaria|me ve|me manda|manda|pode ser|me traz|traz|coloca|adiciona|anota|tambem|numero|num|item|opcao|por favor|pfv|pf|isso)\b/g
+const ARTICLE_RE = /(^|\s)(a|o|as|os|n|no|nº)(?=\s|$)/g
+
+/**
+ * Item pelo número do catálogo: "1", "quero a 4", "2x3" (item 2, 3 unidades), "duas da 1".
+ * Retorna undefined se o trecho tiver outras palavras (aí é tratado como nome de produto).
+ */
+function numberedItem (chunk: string): { index: number; qty: number } | undefined {
+  const c = chunk.replace(ORDER_FILLER_RE, ' ').replace(ARTICLE_RE, ' ').replace(/\s+/g, ' ').trim()
+  let m = /^(\d{1,2})\s*[x*]\s*(\d{1,2})$/.exec(c)
+  if (m) return { index: Number(m[1]), qty: clampQty(Number(m[2])) }
+  m = new RegExp(`^(${QTY_WORD})\\s*(?:x\\s*)?(?:da|do|de)\\s+(\\d{1,2})$`).exec(c)
+  if (m) return { index: Number(m[2]), qty: clampQty(parseQuantity(m[1])) }
+  m = /^(\d{1,2})$/.exec(c)
+  if (m) return { index: Number(m[1]), qty: 1 }
+  return undefined
+}
+
+const clampQty = (q: number) => Math.max(1, Math.min(99, q || 1))
+
+/** Separa os itens e também números soltos por espaço: "1 2 e 4" -> ["1", "2", "4"]. */
+function orderChunks (n: string): string[] {
+  return splitItems(n.replace(/[!.?]+$/, '')).flatMap(c => {
+    const nums = c.replace(ORDER_FILLER_RE, ' ').replace(ARTICLE_RE, ' ').trim()
+    return /^(\d{1,2}\s+)+\d{1,2}$/.test(nums) ? nums.split(/\s+/) : [c]
+  })
+}
+
+/** Produtos do grupo principal (a primeira palavra mais comum, ex.: "Pizza ..."); sem grupo, todos. */
+function mainGroup (products: Product[]): Product[] {
+  const count = new Map<string, number>()
+  for (const p of products) {
+    const w = normalize(p.name).split(' ')[0]
+    count.set(w, (count.get(w) ?? 0) + 1)
+  }
+  const [word, n] = [...count.entries()].sort((a, b) => b[1] - a[1])[0] ?? ['', 0]
+  return n >= 2 ? products.filter(p => normalize(p.name).split(' ')[0] === word) : products
+}
+
+/** A última mensagem do bot foi o catálogo? (evita mandar a lista de novo) */
+function lastBotWasCatalog (conv: Conversation): boolean {
+  for (let i = conv.messages.length - 1; i >= 0; i--) {
+    const m = conv.messages[i]
+    if (m.from === 'bot') return m.text.startsWith('🛍️')
+  }
+  return false
 }
 
 function style (tenant: TenantConfig): 'human' | 'menu' {
