@@ -1,0 +1,549 @@
+{
+  "nome": "Doçuras da Lorrany",
+  "chamada": "Bolos confeitados e caseiros",
+  "slogan": "Bolos e docinhos feitos com carinho para adoçar os seus momentos.",
+  "logo": "assets/img/logo.png",
+  "capa": "1621303837174-89787a7d4729",
+  "tema": {
+    "primaria": "#d6457a",
+    "textoPrimaria": "#ffffff",
+    "secundaria": "#f7c6d6",
+    "fundo": "#fff7f9",
+    "superficie": "#ffffff",
+    "texto": "#4a2318",
+    "suave": "#8a6a62"
+  },
+  "promo": {
+    "ativo": true,
+    "selo": "Encomendas",
+    "titulo": "Faça sua encomenda com antecedência",
+    "texto": "Bolos confeitados por kg, bolos caseiros e docinhos para festas. Escolha, monte o pedido e envie pelo WhatsApp."
+  },
+  "sobre": "A Doçuras da Lorrany nasceu do amor pela confeitaria. Cada bolo é feito sob encomenda, com ingredientes selecionados e o capricho de quem faz doce de verdade, do jeitinho que a sua festa merece.",
+  "diferenciais": [
+    "Feito sob encomenda, sempre fresquinho",
+    "Recheios generosos com leite Ninho",
+    "Bolos caseiros com gostinho de vó",
+    "Entrega ou retirada combinada"
+  ],
+  "galeria": [
+    "1571115177098-24ec42ed204d",
+    "1558636508-e0db3814bd1d",
+    "1563729784474-d77dbb933a9e",
+    "1586985289688-ca3cf47d3e6e"
+  ],
+  "contato": {
+    "whatsapp": "5562991751262",
+    "telefone": "(62) 99175-1262",
+    "email": ""
+  },
+  "redes": {
+    "instagram": "docuraslorrany",
+    "facebook": "",
+    "tiktok": ""
+  },
+  "endereco": {
+    "rua": "Conj. Res. Aruanã III",
+    "bairro": "",
+    "cidade": "Goiânia",
+    "uf": "GO",
+    "cep": "74735-160",
+    "referencia": "",
+    "linkMapa": "https://maps.app.goo.gl/4oBUQBogjNPAFy8b8"
+  },
+  "mostrarHorario": true,
+  "horarios": [
+    null,
+    {
+      "abre": "08:00",
+      "fecha": "19:00"
+    },
+    {
+      "abre": "08:00",
+      "fecha": "19:00"
+    },
+    {
+      "abre": "08:00",
+      "fecha": "19:00"
+    },
+    {
+      "abre": "08:00",
+      "fecha": "19:00"
+    },
+    {
+      "abre": "08:00",
+      "fecha": "19:00"
+    },
+    {
+      "abre": "08:00",
+      "fecha": "14:00"
+    }
+  ],
+  "pedidos": {
+    "entrega": true,
+    "retirada": true,
+    "mesa": false,
+    "mesas": 0,
+    "encomenda": true,
+    "antecedenciaDias": 2,
+    "avisoEncomenda": "Encomendas com no mínimo 2 dias de antecedência. A confirmação é feita pelo WhatsApp.",
+    "datasBloqueadas": [],
+    "diasSemEncomenda": []
+  },
+  "entrega": {
+    "taxa": 25,
+    "tempo": "",
+    "pedidoMinimo": 0,
+    "gratisAcima": 0,
+    "area": "Goiânia e região (taxa combinada pelo WhatsApp)"
+  },
+  "pagamento": {
+    "pix": {
+      "ativo": true,
+      "tipo": "telefone",
+      "chave": "",
+      "titular": "",
+      "cidade": "Goiânia"
+    },
+    "credito": true,
+    "debito": true,
+    "dinheiro": true,
+    "obsCartao": "Maquininha na entrega ou na retirada.",
+    "linkCartao": "",
+    "transferencia": false,
+    "contas": [],
+    "sinal": ""
+  },
+  "bolosKg": {
+    "pesos": [
+      1,
+      1.5,
+      2,
+      2.5,
+      3,
+      3.5,
+      4,
+      5
+    ],
+    "fatiasPorKg": 10,
+    "massas": [
+      {
+        "nome": "Massa branca",
+        "acrescimo": 0,
+        "porKg": false
+      },
+      {
+        "nome": "Massa de chocolate",
+        "acrescimo": 5,
+        "porKg": false
+      }
+    ],
+    "coberturas": [],
+    "pedirNome": true,
+    "topo": {
+      "ativo": false,
+      "preco": 0
+    }
+  },
+  "categorias": [
+    {
+      "nome": "Bolos confeitados · R$ 80/kg",
+      "icone": "🎂",
+      "desc": "Escolha a massa (branca ou chocolate) e o peso. Valor por kg.",
+      "itens": [
+        {
+          "nome": "Ninho com Sonho de Valsa",
+          "desc": "Creme de leite Ninho com pedaços de Sonho de Valsa.",
+          "precoKg": 80,
+          "img": "1588195538326-c5b1e9f80a1b",
+          "tags": [
+            "Mais pedido"
+          ]
+        },
+        {
+          "nome": "Ninho com Ouro Branco",
+          "desc": "Creme de leite Ninho com pedaços de Ouro Branco.",
+          "precoKg": 80,
+          "img": "1584982890941-b788ae5a54df"
+        },
+        {
+          "nome": "Ninho com Kit Kat",
+          "desc": "Creme de leite Ninho com Kit Kat crocante.",
+          "precoKg": 80,
+          "img": "1695886855883-d7162c1e3b09"
+        },
+        {
+          "nome": "Ninho com Bis",
+          "desc": "Creme de leite Ninho com pedaços de Bis.",
+          "precoKg": 80,
+          "img": "1606312619070-d48b4c652a52"
+        },
+        {
+          "nome": "Ninho com Oreo",
+          "desc": "Creme de leite Ninho com biscoito Oreo triturado.",
+          "precoKg": 80,
+          "img": "1630994210310-3b7c6d1bab48"
+        },
+        {
+          "nome": "Ninho com raspas de chocolate preto e branco",
+          "desc": "Creme de leite Ninho com raspas de chocolate ao leite e branco.",
+          "precoKg": 80,
+          "img": "1602351447937-745cb720612f"
+        },
+        {
+          "nome": "Ninho com brigadeiro",
+          "desc": "A dupla clássica: creme de Ninho e brigadeiro cremoso.",
+          "precoKg": 80,
+          "img": "1606983340126-99ab4feaa64a",
+          "tags": [
+            "Mais pedido"
+          ]
+        },
+        {
+          "nome": "Ninho com brigadeiro branco",
+          "desc": "Creme de leite Ninho com brigadeiro branco.",
+          "precoKg": 80,
+          "img": "1551489186-e9a8fa75c425"
+        }
+      ]
+    },
+    {
+      "nome": "Bolos confeitados · R$ 85/kg",
+      "icone": "🎂",
+      "desc": "Escolha a massa (branca ou chocolate) e o peso. Valor por kg.",
+      "itens": [
+        {
+          "nome": "Ninho com beijinho",
+          "desc": "Creme de leite Ninho com beijinho de coco.",
+          "precoKg": 85,
+          "img": "1716579899416-72375f69ada7"
+        },
+        {
+          "nome": "Ninho com abacaxi",
+          "desc": "Creme de leite Ninho com abacaxi em calda.",
+          "precoKg": 85,
+          "img": "1628505048571-327399c9324c"
+        },
+        {
+          "nome": "Ninho com abacaxi e coco",
+          "desc": "Creme de leite Ninho, abacaxi e coco.",
+          "precoKg": 85,
+          "img": "1716579895359-e9ac8ce97461"
+        },
+        {
+          "nome": "Prestígio",
+          "desc": "Chocolate com recheio cremoso de coco.",
+          "precoKg": 85,
+          "img": "1517427294546-5aa121f68e8a"
+        }
+      ]
+    },
+    {
+      "nome": "Bolos confeitados · R$ 90/kg",
+      "icone": "🎂",
+      "desc": "Escolha a massa (branca ou chocolate) e o peso. Valor por kg.",
+      "itens": [
+        {
+          "nome": "Ninho com geleia de morango",
+          "desc": "Creme de leite Ninho com geleia artesanal de morango.",
+          "precoKg": 90,
+          "img": "1677840147140-252adb9ca347",
+          "tags": [
+            "Mais pedido"
+          ]
+        },
+        {
+          "nome": "Ninho com geleia de morango e Sonho de Valsa",
+          "desc": "Creme de Ninho, geleia de morango e Sonho de Valsa.",
+          "precoKg": 90,
+          "img": "1622621746668-59fb299bc4d7"
+        },
+        {
+          "nome": "Ninho com geleia de morango e Ouro Branco",
+          "desc": "Creme de Ninho, geleia de morango e Ouro Branco.",
+          "precoKg": 90,
+          "img": "1602663491496-73f07481dbea"
+        },
+        {
+          "nome": "Ninho com geleia de morango e brigadeiro",
+          "desc": "Creme de Ninho, geleia de morango e brigadeiro.",
+          "precoKg": 90,
+          "img": "1579356094148-9b74dab60f5b"
+        },
+        {
+          "nome": "Ninho com pêssego",
+          "desc": "Creme de leite Ninho com pêssego em calda.",
+          "precoKg": 90,
+          "img": "1488477304112-4944851de03d"
+        },
+        {
+          "nome": "Ninho com uva",
+          "desc": "Creme de leite Ninho com uvas frescas.",
+          "precoKg": 90,
+          "img": "1775883377309-d34ee7eb0ef0"
+        },
+        {
+          "nome": "Ninho com uva e brigadeiro",
+          "desc": "Creme de Ninho, uvas frescas e brigadeiro.",
+          "precoKg": 90,
+          "img": "1582716401301-b2407dc7563d"
+        },
+        {
+          "nome": "Doce de leite com ameixa",
+          "desc": "Doce de leite cremoso com ameixas.",
+          "precoKg": 90,
+          "img": "1547414368-ac947d00b91d"
+        }
+      ]
+    },
+    {
+      "nome": "Kits festa",
+      "icone": "🎉",
+      "oculto": true,
+      "desc": "Bolo e docinhos juntos, com preço especial.",
+      "itens": [
+        {
+          "nome": "Kit festa pequeno",
+          "desc": "Bolo confeitado de 2 kg (Ninho com brigadeiro) + 1 cento de docinhos tradicionais.",
+          "preco": 300,
+          "img": "1558636508-e0db3814bd1d",
+          "rendimento": "Serve cerca de 20 pessoas."
+        },
+        {
+          "nome": "Kit festa médio",
+          "desc": "Bolo confeitado de 3 kg (Ninho com brigadeiro) + 2 centos de docinhos tradicionais.",
+          "preco": 520,
+          "img": "1563729784474-d77dbb933a9e",
+          "rendimento": "Serve cerca de 30 pessoas."
+        }
+      ]
+    },
+    {
+      "nome": "Docinhos",
+      "icone": "🍫",
+      "desc": "Vendidos por cento ou meio cento. Perfeitos para festas.",
+      "itens": [
+        {
+          "nome": "Docinhos tradicionais",
+          "desc": "Escolha até 2 sabores para montar o seu cento.",
+          "img": "1549007994-cb92caebd54b",
+          "opcoesTitulo": "Quantidade",
+          "opcoes": [
+            {
+              "nome": "Cento (100 un.)",
+              "preco": 140
+            },
+            {
+              "nome": "Meio cento (50 un.)",
+              "preco": 70
+            }
+          ],
+          "sabores": {
+            "lista": [
+              "Brigadeiro",
+              "Beijinho",
+              "Brigadeiro branco"
+            ],
+            "max": 2
+          }
+        },
+        {
+          "nome": "Docinhos gourmet",
+          "desc": "Docinhos gourmet com acabamento especial.",
+          "img": "1765946025956-176dd679eb7a",
+          "opcoesTitulo": "Quantidade",
+          "opcoes": [
+            {
+              "nome": "Cento (100 un.)",
+              "preco": 160
+            },
+            {
+              "nome": "Meio cento (50 un.)",
+              "preco": 80
+            }
+          ]
+        },
+        {
+          "nome": "Docinhos de leite Ninho",
+          "desc": "Docinhos cremosos de leite Ninho.",
+          "img": "1776722089961-b6d29da07280",
+          "opcoesTitulo": "Quantidade",
+          "opcoes": [
+            {
+              "nome": "Cento (100 un.)",
+              "preco": 180
+            },
+            {
+              "nome": "Meio cento (50 un.)",
+              "preco": 90
+            }
+          ]
+        },
+        {
+          "nome": "Docinhos de leite Ninho com Nutella",
+          "desc": "Leite Ninho com recheio de Nutella.",
+          "img": "1630953900113-ab915924aab2",
+          "tags": [
+            "Mais pedido"
+          ],
+          "opcoesTitulo": "Quantidade",
+          "opcoes": [
+            {
+              "nome": "Cento (100 un.)",
+              "preco": 200
+            },
+            {
+              "nome": "Meio cento (50 un.)",
+              "preco": 100
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "nome": "Bolos caseiros",
+      "icone": "🍰",
+      "desc": "Bolos simples, fofinhos, sem calda. Preço por bolo.",
+      "itens": [
+        {
+          "nome": "Bolo de fubá",
+          "preco": 25,
+          "img": "1603279126476-93ce8278312c",
+          "desc": "Fofinho, com aquele gostinho de café da tarde."
+        },
+        {
+          "nome": "Bolo de chocolate",
+          "preco": 30,
+          "img": "1516054575922-f0b8eeadec1a",
+          "desc": "Massa de chocolate macia e úmida."
+        },
+        {
+          "nome": "Bolo de coco",
+          "preco": 28,
+          "img": "1708410186121-7c978590c082",
+          "desc": "Massa fofinha com coco."
+        },
+        {
+          "nome": "Bolo de farinha de trigo",
+          "preco": 25,
+          "img": "1514435390218-898a0e01517a",
+          "desc": "O clássico bolo simples, leve e macio."
+        },
+        {
+          "nome": "Bolo de laranja",
+          "preco": 28,
+          "img": "1603455907761-b11099c592d4",
+          "desc": "Feito com suco de laranja, perfumado e macio."
+        },
+        {
+          "nome": "Bolo de limão",
+          "preco": 25,
+          "img": "1767032778094-1edb984e5b23",
+          "desc": "Leve e refrescante, com raspas de limão."
+        },
+        {
+          "nome": "Bolo de milho",
+          "preco": 30,
+          "img": "1564329298022-58a5dbaa68ed",
+          "desc": "Cremoso, feito com milho."
+        },
+        {
+          "nome": "Bolo formigueiro",
+          "preco": 25,
+          "img": "1587179975948-e8adfa7d0b4e",
+          "desc": "Massa branca com granulado de chocolate."
+        },
+        {
+          "nome": "Bolo de leite Ninho",
+          "preco": 40,
+          "img": "1564329298090-7dc907940e6d",
+          "desc": "Massa macia com o sabor do leite Ninho."
+        },
+        {
+          "nome": "Bolo de cenoura",
+          "preco": 30,
+          "img": "1650377812661-a666f109effb",
+          "desc": "Massa de cenoura fofinha e douradinha."
+        },
+        {
+          "nome": "Bolo de milho com requeijão cremoso",
+          "preco": 50,
+          "img": "1564329297904-510dc241adbe",
+          "desc": "Bolo de milho com camada de requeijão cremoso."
+        },
+        {
+          "nome": "Bolo de paçoca",
+          "preco": 35,
+          "img": "1586221802213-08e14e5cf9ae",
+          "desc": "Massa com paçoca, para quem ama amendoim."
+        }
+      ]
+    },
+    {
+      "nome": "Bolos caseiros com calda",
+      "icone": "🍯",
+      "desc": "Nossos caseiros com aquela calda caprichada. Preço por bolo.",
+      "itens": [
+        {
+          "nome": "Fubá com goiabada",
+          "preco": 35,
+          "img": "1614550706648-c33575474f43",
+          "desc": "Bolo de fubá com pedaços de goiabada."
+        },
+        {
+          "nome": "Coco com calda",
+          "preco": 40,
+          "img": "1773086613382-5ff2798782c7",
+          "desc": "Bolo de coco coberto com calda."
+        },
+        {
+          "nome": "Limão com calda",
+          "preco": 45,
+          "img": "1691242720281-9269de4d9f86",
+          "desc": "Bolo de limão com calda de limão."
+        },
+        {
+          "nome": "Chocolate com calda",
+          "preco": 45,
+          "img": "1623888884968-b5a895f882dc",
+          "tags": [
+            "Mais pedido"
+          ],
+          "desc": "Bolo de chocolate com calda de chocolate."
+        },
+        {
+          "nome": "Formigueiro com calda",
+          "preco": 38,
+          "img": "1655233536300-cd2aacef1aaf",
+          "desc": "Bolo formigueiro com calda de chocolate."
+        },
+        {
+          "nome": "Leite Ninho com calda",
+          "preco": 55,
+          "img": "1586097384188-57addb8dc225",
+          "desc": "Bolo de leite Ninho com calda cremosa."
+        },
+        {
+          "nome": "Cenoura com calda",
+          "preco": 50,
+          "img": "1752169053656-4bdf2cfed816",
+          "tags": [
+            "Mais pedido"
+          ],
+          "desc": "O clássico de cenoura com calda de chocolate."
+        },
+        {
+          "nome": "Paçoca com calda",
+          "preco": 50,
+          "img": "1622419015886-5e773bf6006e",
+          "desc": "Bolo de paçoca com calda."
+        }
+      ]
+    }
+  ],
+  "credito": {
+    "nome": "Joás Santana",
+    "whatsapp": "5562991657619"
+  },
+  "depoimentos": []
+}

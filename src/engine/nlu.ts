@@ -103,14 +103,25 @@ export function findProduct (products: Product[], n: string): ProductMatch {
 
   const scored = products.map((product, i) => {
     let score = 0
+    let missing = 0
+    let missingUnique = 0
     for (const t of new Set(names[i])) {
       if (words.some(w => similar(w, t))) score += 1 / (freq.get(t) ?? 1)
+      else {
+        missing++
+        if (freq.get(t) === 1) missingUnique++
+      }
     }
-    return { product, score }
+    return { product, score, missing, missingUnique }
   }).filter(s => s.score > 0).sort((a, b) => b.score - a.score)
 
   if (scored.length === 0) return { kind: 'none' }
-  const best = scored.filter(s => s.score === scored[0].score)
+  const tied = scored.filter(s => s.score === scored[0].score)
+  // "bolo ninho com brigadeiro": quem teve o nome inteiro citado ganha de "ninho com uva e brigadeiro"
+  const complete = tied.filter(s => s.missing === 0)
+  // "docinho de ninho": perde quem tem uma palavra só dele que o cliente não falou ("... com Nutella")
+  const plain = tied.filter(s => s.missingUnique === 0)
+  const best = complete.length ? complete : plain.length ? plain : tied
   return best.length === 1 ? { kind: 'one', product: best[0].product } : { kind: 'many', products: best.map(s => s.product) }
 }
 

@@ -12,7 +12,8 @@
     "dev": "tsx watch src/index.ts",
     "test": "node --import tsx --test test/*.test.ts",
     "typecheck": "tsc --noEmit",
-    "test:load": "tsx scripts/load-test.ts"
+    "test:load": "tsx scripts/load-test.ts",
+    "client:import": "tsx scripts/import-catalog.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "1.4.0",

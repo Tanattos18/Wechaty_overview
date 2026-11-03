@@ -66,7 +66,8 @@ const app = createPanel({ store, engine, bots, knowledge, adminPassword, session
 const server = app.listen(port, () => console.log(`Painel em http://localhost:${port}`))
 
 if (env.AUTO_START_BOTS === 'true') {
-  for (const tenant of store.listTenants().filter(t => t.active && !t.suspended)) {
+  const paired = (id: string) => fs.existsSync(path.join(dataDir, 'sessions', `session-${id}`))
+  for (const tenant of store.listTenants().filter(t => t.active && !t.suspended && paired(t.id))) {
     bots.start(tenant.id).catch(err => console.error(`[bot] ${tenant.id} não iniciou:`, err?.message ?? err))
   }
 }

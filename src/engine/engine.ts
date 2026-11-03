@@ -75,6 +75,8 @@ const QUESTION_CUE_RE = /\b(perguntei|pergunta|pergunto|sera que|se ja|se tem|se
 const NUMBER_REF_RE = /(?:^|\b(?:a|o|na|no|da|do|numero|num|n|item|opcao)\s+)(\d{1,2})\b(?!\s*(?:x|reais|real|pessoas|fatias|pedacos|min|minutos|horas|h)\b)/
 const PROMO_RE = /\b(promocao|promocoes|promo|combo|oferta)\b/
 const HALF_RE = /\b(meio a meio|metade|meia|meio)\b/
+/** "meio cento", "meia dúzia", "1 kg e meio" não são pizza meio a meio. */
+const wantsHalf = (n: string) => HALF_RE.test(n.replace(/\b(meio|meia) (cento|duzia|quilo|kilo|kg)\b|\be meio\b/g, ' '))
 const INFO_INTENTS: Intent[] = ['hours', 'address', 'phone', 'delivery', 'payment']
 const QUESTION_RE = /\?\s*$|^(qual|quais|como|onde|quando|quanto|o que|que|tem|voces|vcs|e)\b/
 
@@ -225,7 +227,7 @@ export class Engine {
 
     // Esperando o tamanho ("Qual tamanho da Calabresa?"): aceita o número ou o nome do tamanho
     if (conv.pendingSize?.length) {
-      const reply = this.resolvePendingSize(tenant, conv, bare)
+      const reply = this.resolvePendingSize(tenant, conv, bare, n)
       if (reply) return [reply]
     }
 
@@ -283,6 +285,11 @@ export class Engine {
           conv.checkout.address = text.slice(0, 300)
         }
         return [this.nextCheckoutStep(tenant, conv, 'Anotado! ')]
+
+      case 'checkout_when': {
+        const problem = this.readWhen(tenant, conv, bare, text)
+        return [problem ?? this.nextCheckoutStep(tenant, conv, 'Combinado! ')]
+      }
 
       case 'checkout_payment': {
         const ask = this.readPayment(tenant, conv, bare, text)
@@ -379,7 +386,7 @@ export class Engine {
     const has = (i: Intent) => intents.includes(i)
     const short = n.split(' ').length <= 6
     const asksInfo = INFO_INTENTS.some(has)
-    const isQuestion = QUESTION_RE.test(n) || QUESTION_CUE_RE.test(n)
+    const isQuestion = (QUESTION_RE.test(n) && !/^e (um|uma|meio|meia|mais|dois|duas|tres|\d+)\b[^?]*$/.test(n)) || QUESTION_CUE_RE.test(n)
     const name = firstName(conv)
 
     if (has('human')) return { replies: [this.handoff(tenant, conv)] }
@@ -456,7 +463,7 @@ export class Engine {
     if (wantsOthers) return { replies: [this.optionsSummary(tenant, conv)] }
 
     // "meio calabresa meio margherita" já é um pedido (quando o cliente monta meio a meio)
-    if (tenant.halfHalf && HALF_RE.test(n) && !isQuestion) {
+    if (tenant.halfHalf && wantsHalf(n) && !isQuestion) {
       const half = this.tryHalfHalf(tenant, conv, n)
       if (half) return { replies: [half] }
     }
@@ -590,7 +597,7 @@ export class Engine {
           size = matchSize(product, sizeText)
           if (!size) return `FALTA TAMANHO: pergunte qual tamanho da ${product.name}. Opções: ${product.sizes.map(s => `${s.name} ${formatPrice(s.price)}`).join(', ')}.`
         }
-        const label = this.addToCart(conv, product, qty, size, extras)
+        const label = this.addToCart(conv, product, qty, size, extras, str(args.observacao).slice(0, 120))
         return `OK, anotado: ${label}. ${cartState()}`
       }
       case 'remover_item': {
@@ -614,12 +621,17 @@ export class Engine {
         if (args.retirada === true) conv.checkout.address = 'Retirada no local'
         else if (str(args.endereco)) conv.checkout.address = str(args.endereco).slice(0, 300)
         if (str(args.pagamento)) conv.checkout.payment = str(args.pagamento).slice(0, 120)
-        return `OK. Nome: ${conv.checkout.name ?? '(falta)'}. Entrega: ${conv.checkout.address ?? '(falta)'}. Pagamento: ${conv.checkout.payment ?? '(falta)'}.`
+        if (str(args.data_horario)) {
+          const problem = this.readWhen(tenant, conv, normalize(str(args.data_horario)), str(args.data_horario))
+          if (problem && /antecedencia/.test(normalize(problem))) return `ERRO: ${problem}`
+        }
+        return `OK. Nome: ${conv.checkout.name ?? '(falta)'}. Entrega: ${conv.checkout.address ?? '(falta)'}.${tenant.scheduling?.enabled ? ` Dia/horário: ${conv.checkout.when ?? '(falta)'}.` : ''} Pagamento: ${conv.checkout.payment ?? '(falta)'}.`
       }
       case 'confirmar_pedido': {
         if (!conv.cart.length) return 'ERRO: o pedido está vazio.'
         if (!conv.checkout.name && conv.name) conv.checkout.name = conv.name
         if (!conv.checkout.address) return 'ERRO: falta o endereço de entrega (ou confirmar que vai retirar). Pergunte ao cliente.'
+        if (tenant.scheduling?.enabled && !conv.checkout.when) return 'ERRO: falta o dia e o horário da encomenda. Pergunte ao cliente.'
         if (!conv.checkout.payment) return 'ERRO: falta a forma de pagamento. Pergunte ao cliente antes de confirmar.'
         const min = moneyVar(tenant, 'pedido_minimo')
         if (min && cartTotal(conv) < min) return `ERRO: o pedido mínimo é ${formatPrice(min)} e o pedido está em ${formatPrice(cartTotal(conv))}.`
@@ -834,9 +846,18 @@ Quer que eu já anote pra você?`
       return 'Nosso catálogo ainda não está disponível por aqui. Se quiser, digite *atendente* que alguém da equipe te passa as opções.'
     }
     if (conv.lastKind === 'other') conv.lastKind = 'catalog'
-    const lines = products.map((p, i) =>
-      `*${i + 1}* - ${p.name} — ${priceLabel(p)}${p.description ? `\n      _${p.description}_` : ''}` +
-      (p.extras?.length ? `\n      Adicionais: ${p.extras.map(e => `${e.name} +${formatPrice(e.price)}`).join(', ')}` : ''))
+    const compact = products.length > 12
+    const lines: string[] = []
+    let section: string | undefined
+    products.forEach((p, i) => {
+      if (p.category && p.category !== section) {
+        section = p.category
+        lines.push(`${lines.length ? '\n' : ''}*${p.category}*`)
+      }
+      lines.push(`*${i + 1}* - ${p.name} — ${priceLabel(p)}` +
+        (!compact && p.description ? `\n      _${p.description}_` : '') +
+        (!compact && p.extras?.length ? `\n      Adicionais: ${p.extras.map(e => `${e.name} +${formatPrice(e.price)}`).join(', ')}` : ''))
+    })
     return [
       '🛍️ *Catálogo*',
       '',
@@ -934,9 +955,9 @@ Quer que eu já anote pra você?`
    * Coloca no carrinho já com o tamanho e os adicionais. Cada combinação é uma linha:
    * "Pizza Calabresa (Grande) + Borda de catupiry".
    */
-  private addToCart (conv: Conversation, product: Product, qty: number, size?: ProductOption, extras: ProductOption[] = []): string {
-    const key = [product.id, size?.name, ...extras.map(e => e.name)].filter(Boolean).join('|')
-    const name = `${product.name}${size ? ` (${size.name})` : ''}${extras.map(e => ` + ${e.name}`).join('')}`
+  private addToCart (conv: Conversation, product: Product, qty: number, size?: ProductOption, extras: ProductOption[] = [], note = ''): string {
+    const key = [product.id, size?.name, ...extras.map(e => e.name), note].filter(Boolean).join('|')
+    const name = `${product.name}${size ? ` (${size.name})` : ''}${extras.map(e => ` + ${e.name}`).join('')}${note ? ` — ${note}` : ''}`
     const price = round2((size?.price ?? product.price) + extras.reduce((s, e) => s + e.price, 0))
     const item = conv.cart.find(i => i.productId === key)
     if (item) item.qty += qty
@@ -973,6 +994,10 @@ Quer que eu já anote pra você?`
     const pending = conv.pendingSize?.[0]
     if (!pending) return this.cartText(conv)
     const { label, sizes } = this.pendingInfo(tenant, pending.productId)
+    if (sizes.every(s => sizeWeight(s.name) !== undefined)) {
+      const list = sizes.map(s => `• ${s.name} — ${formatPrice(s.price)}`).join('\n')
+      return `${prefix}De quantos quilos ${pending.qty > 1 ? `os ${pending.qty}` : 'o'} *${label}*?\n\n${list}\n\nÉ só me dizer o peso (ex.: *2 kg*).`
+    }
     const list = sizes.map((s, i) => `*${i + 1}* - ${s.name} — ${formatPrice(s.price)}`).join('\n')
     return `${prefix}Qual tamanho ${pending.qty > 1 ? `das ${pending.qty} ` : 'da '}*${label}*?\n\n${list}`
   }
@@ -992,11 +1017,13 @@ Quer que eu já anote pra você?`
   }
 
   /** Resposta ao "Qual tamanho?": número ou nome do tamanho. Sem relação com a pergunta: deixa o fluxo seguir. */
-  private resolvePendingSize (tenant: TenantConfig, conv: Conversation, bare: string): string | undefined {
+  private resolvePendingSize (tenant: TenantConfig, conv: Conversation, bare: string, raw = bare): string | undefined {
     const pending = conv.pendingSize![0]
     const { sizes } = this.pendingInfo(tenant, pending.productId)
-    const byNumber = /^\d$/.test(bare) ? sizes[Number(bare) - 1] : undefined
-    const size = byNumber ?? matchSize({ sizes } as Product, bare)
+    const byWeight = sizes.every(s => sizeWeight(s.name) !== undefined)
+    const byNumber = !byWeight && /^\d$/.test(bare) ? sizes[Number(bare) - 1] : undefined
+    // Pesos usam o texto com vírgula ("2,5 kg")
+    const size = byNumber ?? matchSize({ sizes } as Product, byWeight ? raw : bare)
     if (!size) {
       conv.pendingSize = undefined // mudou de assunto
       return undefined
@@ -1033,7 +1060,7 @@ Quer que eu já anote pra você?`
 
   /** "meio calabresa meio margherita", "metade 4 queijos e metade calabresa". Undefined se não for meio a meio. */
   private tryHalfHalf (tenant: TenantConfig, conv: Conversation, n: string): string | undefined {
-    if (!HALF_RE.test(n)) return undefined
+    if (!wantsHalf(n)) return undefined
     const products = this.activeProducts(tenant)
     const found: Product[] = []
     for (const seg of n.split(/\b(?:meio a meio|metade|meia|meio|com|e)\b|\//)) {
@@ -1073,7 +1100,7 @@ Quer que eu já anote pra você?`
     let last: Product | undefined
 
     // Meio a meio ("meio calabresa meio margherita"); sem regra cadastrada, quem responde é a base de conhecimento
-    if (HALF_RE.test(n)) {
+    if (wantsHalf(n)) {
       if (!tenant.halfHalf) return undefined
       const half = this.tryHalfHalf(tenant, conv, n)
       if (half) return half
@@ -1094,7 +1121,8 @@ Quer que eu já anote pra você?`
     // Palavras de adicionais ("borda de catupiry") não podem atrapalhar a escolha do produto
     const extraWords = new Set(products.flatMap(p => (p.extras ?? []).flatMap(e => keywords(normalize(e.name)))))
 
-    for (const chunk of byNumber ? orderChunks(n) : splitItems(n)) {
+    const guarded = protectAnd(n, products)
+    for (const chunk of (byNumber ? orderChunks(guarded) : splitItems(guarded)).map(c => c.replace(/_e_/g, ' e '))) {
       const numbered = byNumber ? numberedItem(chunk) : undefined
       if (numbered) {
         const product = products[numbered.index - 1]
@@ -1182,6 +1210,12 @@ Quer que eu já anote pra você?`
       conv.state = 'checkout_address'
       return `${prefix}Qual o endereço de entrega (rua, número e bairro)? Se preferir retirar aqui, é só dizer *retirar*.`
     }
+    if (tenant.scheduling?.enabled && !conv.checkout.when) {
+      conv.state = 'checkout_when'
+      const min = tenant.scheduling.minDays
+      const kind = conv.checkout.address === 'Retirada no local' ? 'retirada' : 'entrega'
+      return `${prefix}Pra qual dia e horário é a ${kind}?${min ? ` As encomendas são feitas com no mínimo *${min} ${min === 1 ? 'dia' : 'dias'}* de antecedência (a partir de *${formatDay(addDays(today(this.now()), min))}*).` : ''}`
+    }
     if (!conv.checkout.payment) {
       conv.state = 'checkout_payment'
       const methods = tenantVar(tenant, 'formas_pagamento')
@@ -1189,6 +1223,29 @@ Quer que eu já anote pra você?`
     }
     conv.state = 'checkout_confirm'
     return `${prefix}Confere pra mim, por favor:\n\n${this.orderSummary(tenant, conv)}\n\nPosso confirmar? (responda *sim* ou *cancelar*)`
+  }
+
+  /** Lê o dia/horário da encomenda. Retorna a pergunta de novo (data cedo demais, sem data) ou undefined quando anotou. */
+  private readWhen (tenant: TenantConfig, conv: Conversation, bare: string, text: string): string | undefined {
+    const min = tenant.scheduling?.minDays ?? 0
+    const now = today(this.now())
+    const day = parseDay(bare, now)
+    if (day) {
+      if (diffDays(day, now) < min) {
+        return `Pra essa data não consigo 😕 As encomendas precisam de pelo menos *${min} ${min === 1 ? 'dia' : 'dias'}* de antecedência — dá a partir de *${formatDay(addDays(now, min))}*. Qual outra data fica boa pra você?`
+      }
+      // "sábado às 15h" -> "sábado, 07/11, às 15h"
+      const time = /\b(\d{1,2})\s*(?:h|:|horas?)\s*(\d{2})?\b/.exec(bare)
+      conv.checkout.when = `${formatDay(day)}${time ? `, às ${time[1]}h${time[2] ?? ''}` : ''}`
+      return undefined
+    }
+    const tries = conv.checkout.whenTries ?? 0
+    if (tries < 2) {
+      conv.checkout.whenTries = tries + 1
+      return 'Me diz o dia (ex.: *sábado* ou *15/11*) e, se puder, o horário. 😊'
+    }
+    conv.checkout.when = text.slice(0, 120)
+    return undefined
   }
 
   /** Lê a forma de pagamento. Retorna a próxima pergunta (troco, forma não aceita) ou undefined quando já anotou. */
@@ -1244,7 +1301,7 @@ Quer que eu já anote pra você?`
       ? [`Subtotal: ${formatPrice(subtotal)}`, `Taxa de entrega: ${formatPrice(fee)}`, `*Total: ${formatPrice(total)}*`]
       : [`*Total: ${formatPrice(total)}*`, ...(feeNote ? [`Taxa de entrega: ${feeNote}`] : [])]
     return ['📝 *Resumo do pedido*', ...lines, ...totals, '',
-      `Nome: ${conv.checkout.name}`, `Entrega: ${conv.checkout.address}`, ...(conv.checkout.payment ? [`Pagamento: ${conv.checkout.payment}`] : [])].join('\n')
+      `Nome: ${conv.checkout.name}`, `Entrega: ${conv.checkout.address}`, ...(conv.checkout.when ? [`Para: ${conv.checkout.when}`] : []), ...(conv.checkout.payment ? [`Pagamento: ${conv.checkout.payment}`] : [])].join('\n')
   }
 
   private confirmOrder (tenant: TenantConfig, conv: Conversation): string {
@@ -1257,6 +1314,7 @@ Quer que eu já anote pra você?`
       customerName: conv.checkout.name ?? conv.name,
       address: conv.checkout.address ?? '',
       ...(payment ? { payment } : {}),
+      ...(conv.checkout.when ? { scheduledFor: conv.checkout.when } : {}),
       ...(fee ? { deliveryFee: fee } : {}),
       items: conv.cart,
       total,
@@ -1297,6 +1355,19 @@ function numberedItem (chunk: string): { index: number; qty: number } | undefine
 
 const clampQty = (q: number) => Math.max(1, Math.min(99, q || 1))
 
+/** Protege o "e" que faz parte do nome de um produto ("Ninho com abacaxi e coco") para não virar dois itens. */
+function protectAnd (n: string, products: Product[]): string {
+  let out = n
+  for (const p of products) {
+    const words = normalize(p.name).split(/\s+/)
+    for (let i = 1; i < words.length - 1; i++) {
+      if (words[i] !== 'e') continue
+      out = out.replace(new RegExp(`\\b(${words[i - 1]})\\s+e\\s+(${words[i + 1]})\\b`, 'g'), '$1_e_$2')
+    }
+  }
+  return out
+}
+
 /** Separa os itens e também números soltos por espaço: "1 2 e 4" -> ["1", "2", "4"]. */
 function orderChunks (n: string): string[] {
   return splitItems(n.replace(/[!?]+|\.{2,}|\.\s/g, ' ').replace(/[.\s]+$/, '')).flatMap(c => {
@@ -1320,18 +1391,58 @@ const round2 = (v: number) => Math.round(v * 100) / 100
 
 /** "R$ 49,90" ou, com tamanhos, "Média R$ 49,90 · Grande R$ 59,90". */
 function priceLabel (p: Product): string {
-  return p.sizes?.length ? p.sizes.map(s => `${s.name} ${formatPrice(s.price)}`).join(' · ') : formatPrice(p.price)
+  if (!p.sizes?.length) return formatPrice(p.price)
+  // Por peso: o preço do kg ("R$ 80,00 o kg")
+  const w = sizeWeight(p.sizes[0].name)
+  if (w && p.sizes.every(s => sizeWeight(s.name) !== undefined)) return `${formatPrice(round2(p.sizes[0].price / w))} o kg`
+  if (p.sizes.length > 3) return `a partir de ${formatPrice(Math.min(...p.sizes.map(s => s.price)))}`
+  return p.sizes.map(s => `${s.name} ${formatPrice(s.price)}`).join(' · ')
 }
 
 const SIZE_ALIASES: Record<string, string> = { g: 'grande', gde: 'grande', grd: 'grande', m: 'media', med: 'media', p: 'pequena', peq: 'pequena', fam: 'familia' }
 
-/** Tamanho citado no texto ("grande", "a média", "G", "a maior"). */
+/** Peso do tamanho ("1,5 kg" -> 1.5), ou undefined se o tamanho não é um peso. */
+function sizeWeight (name: string): number | undefined {
+  const m = /^(\d+(?:[.,]\d+)?)\s*(?:kg|quilos?|kilos?)\b/i.exec(name.trim())
+  return m ? Number(m[1].replace(',', '.')) : undefined
+}
+
+const WEIGHT_WORDS: Record<string, number> = { um: 1, uma: 1, dois: 2, duas: 2, tres: 3, quatro: 4, cinco: 5, seis: 6 }
+
+/** Peso citado: "2 kg", "2kg", "dois quilos", "1 kg e meio", "meio quilo" — ou só o número ("2", "1,5"). */
+function textWeight (text: string): number | undefined {
+  const n = normalize(text)
+  if (/\bmeio (quilo|kilo|kg)\b/.test(n)) return 0.5
+  const num = (s: string) => WEIGHT_WORDS[s] ?? Number(s.replace(',', '.'))
+  const unit = /(\d+(?:[.,]\d+)?|um|uma|dois|duas|tres|quatro|cinco|seis)\s*(?:kg|k|quilos?|kilos?)\b(\s+e\s+meio)?/.exec(n)
+  if (unit) return num(unit[1]) + (unit[2] ? 0.5 : 0)
+  const bare = /^(?:de\s+|com\s+)?(\d+(?:[.,]\d+)?)$/.exec(n.trim())
+  return bare ? num(bare[1]) : undefined
+}
+
+const sizeWords = (s: string) => normalize(s).replace(/[^a-z0-9 ]/g, ' ').split(/\s+/).filter(Boolean)
+
+/** Tamanho citado no texto ("grande", "a média", "G", "a maior", "2 kg", "meio cento"). */
 function matchSize (p: Pick<Product, 'sizes'>, text: string): ProductOption | undefined {
   const sizes = p.sizes ?? []
   if (!sizes.length) return undefined
-  const tokens = normalize(text).replace(/[^a-z0-9 ]/g, ' ').split(/\s+/).map(t => SIZE_ALIASES[t] ?? t)
-  const found = sizes.find(s => normalize(s.name).split(/\s+/).some(w => tokens.some(t => t === w || (t.length >= 4 && similar(t, w)))))
-  if (found) return found
+  const tokens = sizeWords(text).map(t => SIZE_ALIASES[t] ?? t)
+  // Tamanhos por peso: compara o número
+  const weights = sizes.map(s => sizeWeight(s.name))
+  if (weights.every(w => w !== undefined)) {
+    const w = textWeight(text)
+    if (w !== undefined) return sizes[weights.indexOf(w)]
+  } else {
+    const hit = (w: string) => tokens.some(t => t === w || (t.length >= 4 && similar(t, w)))
+    // Palavras que todos os tamanhos têm ("cento", "un") não ajudam a escolher
+    const lists = sizes.map(s => sizeWords(s.name))
+    const common = new Set(lists[0].filter(w => lists.every(l => l.includes(w))))
+    const own = lists.map(l => l.filter(w => !common.has(w)))
+    const found = own.findIndex(l => l.some(hit))
+    if (found >= 0) return sizes[found]
+    // "um cento": falou só a palavra comum -> o tamanho mais simples
+    if ([...common].some(hit)) return sizes[own.reduce((best, l, i) => (l.length < own[best].length ? i : best), 0)]
+  }
   if (tokens.includes('maior')) return [...sizes].sort((a, b) => b.price - a.price)[0]
   if (tokens.includes('menor')) return [...sizes].sort((a, b) => a.price - b.price)[0]
   return undefined
@@ -1355,6 +1466,53 @@ function halfPrice (tenant: TenantConfig, a: Product, b: Product, sizeName?: str
 /** Produto que representa a promoção (nome ou descrição com "promoção"/"combo"). */
 function promoProduct (products: Product[]): Product | undefined {
   return products.find(p => PROMO_RE.test(normalize(`${p.name} ${p.description ?? ''}`)))
+}
+
+type Day = { y: number; m: number; d: number }
+const WEEKDAYS = ['domingo', 'segunda', 'terca', 'quarta', 'quinta', 'sexta', 'sabado']
+
+/** Data de hoje no horário de Brasília. */
+function today (now: Date): Day {
+  const [y, m, d] = now.toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' }).split('-').map(Number)
+  return { y, m, d }
+}
+const dayUtc = (x: Day) => Date.UTC(x.y, x.m - 1, x.d)
+function addDays (x: Day, n: number): Day {
+  const t = new Date(dayUtc(x) + n * 86_400_000)
+  return { y: t.getUTCFullYear(), m: t.getUTCMonth() + 1, d: t.getUTCDate() }
+}
+const diffDays = (a: Day, b: Day) => Math.round((dayUtc(a) - dayUtc(b)) / 86_400_000)
+function formatDay (x: Day): string {
+  const t = new Date(dayUtc(x))
+  const wd = t.toLocaleDateString('pt-BR', { weekday: 'long', timeZone: 'UTC' })
+  return `${wd}, ${String(x.d).padStart(2, '0')}/${String(x.m).padStart(2, '0')}`
+}
+
+/** Dia citado: "15/11", "dia 20", "amanhã", "sábado", "depois de amanhã". */
+function parseDay (n: string, now: Day): Day | undefined {
+  let m = /\b(\d{1,2})\/(\d{1,2})(?:\/(\d{2,4}))?\b/.exec(n)
+  if (m) {
+    let y = m[3] ? Number(m[3].length === 2 ? `20${m[3]}` : m[3]) : now.y
+    const day = { y, m: Number(m[2]), d: Number(m[1]) }
+    if (!m[3] && diffDays(day, now) < -1) day.y = ++y // "10/01" em dezembro é no ano que vem
+    return day.m >= 1 && day.m <= 12 && day.d >= 1 && day.d <= 31 ? day : undefined
+  }
+  if (/\bdepois de amanha\b/.test(n)) return addDays(now, 2)
+  if (/\bamanha\b/.test(n)) return addDays(now, 1)
+  if (/\bhoje\b/.test(n)) return now
+  m = /\bdia (\d{1,2})\b/.exec(n)
+  if (m) {
+    const d = Number(m[1])
+    let day = { ...now, d }
+    if (diffDays(day, now) < 0) day = now.m === 12 ? { y: now.y + 1, m: 1, d } : { y: now.y, m: now.m + 1, d }
+    return d >= 1 && d <= 31 ? day : undefined
+  }
+  const wd = WEEKDAYS.findIndex(w => new RegExp(`\\b${w}\\b`).test(n))
+  if (wd >= 0) {
+    const current = new Date(dayUtc(now)).getUTCDay()
+    return addDays(now, ((wd - current + 7) % 7) || 7)
+  }
+  return undefined
 }
 
 /** Variável do Conhecimento do cliente (ex.: formas_pagamento, chave_pix). */

@@ -37,6 +37,7 @@ export const AGENT_TOOLS: AgentTool[] = [
       tamanho: { type: 'string', description: 'Tamanho escolhido, se o produto tiver tamanhos' },
       adicionais: { type: 'array', items: { type: 'string' }, description: 'Adicionais escolhidos (ex.: borda recheada)' },
       meio_a_meio_com: { type: 'string', description: 'Segundo sabor, quando o cliente quer pizza meio a meio' },
+      observacao: { type: 'string', description: 'Detalhes do item que o cliente pediu: sabores escolhidos, nome escrito no bolo, tema etc.' },
     }, ['produto']),
   },
   {
@@ -60,6 +61,7 @@ export const AGENT_TOOLS: AgentTool[] = [
       endereco: { type: 'string', description: 'Rua, número, bairro e complemento' },
       retirada: { type: 'boolean', description: 'true se o cliente vai buscar no local' },
       pagamento: { type: 'string', description: 'Forma de pagamento escolhida (e troco, se for dinheiro)' },
+      data_horario: { type: 'string', description: 'Dia e horário da entrega/retirada (encomendas), como o cliente disse' },
     }),
   },
   {
@@ -117,9 +119,9 @@ Ordem do atendimento:
 3. Fim (fechamento), só quando o cliente disser que terminou, nesta ordem e um passo por mensagem (pule o que ele já informou):
    a) confira o pedido (ver_pedido) e o pedido mínimo, se houver;
    b) confirme o nome;
-   c) entrega ou retirada — se entrega, endereço com rua, número e bairro;
+   c) entrega ou retirada — se entrega, endereço com rua, número e bairro;${tenant.scheduling?.enabled ? `\n   c2) dia e horário da encomenda (mínimo de ${tenant.scheduling.minDays} dias de antecedência);` : ''}
    d) forma de pagamento (se for dinheiro, pergunte o troco);
-   e) guarde com dados_entrega e mostre o resumo: itens, subtotal, taxa de entrega (se houver), total, nome, entrega e pagamento — e pergunte se pode confirmar;
+   e) guarde com dados_entrega e mostre o resumo: itens, subtotal, taxa de entrega (se houver), total, nome, entrega${tenant.scheduling?.enabled ? ', dia/horário' : ''} e pagamento — e pergunte se pode confirmar;
    f) só depois do "sim": confirmar_pedido, e informe o número do pedido, o tempo de entrega e, se for Pix, a chave Pix.
 
 Pedidos (sempre pelas ferramentas — o sistema calcula preços e total):
@@ -139,7 +141,7 @@ Descrição: ${tenant.business.description}
 Horário de funcionamento: ${tenant.business.hours}
 Endereço: ${tenant.business.address}
 Telefone: ${tenant.business.phone}
-${variables ? `${variables}\n` : ''}${half ? `${half}\n` : ''}Informações adicionais:
+${variables ? `${variables}\n` : ''}${half ? `${half}\n` : ''}${tenant.scheduling?.enabled ? `Trabalha com encomenda: mínimo de ${tenant.scheduling.minDays} dias de antecedência.\n` : ''}Informações adicionais:
 ${tenant.business.extraInfo}
 </empresa>
 

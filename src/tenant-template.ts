@@ -121,6 +121,7 @@ export function sanitizeTenant (input: any, current: TenantConfig): TenantConfig
         name: str(p?.name, 100).trim(),
         price: Math.max(0, Math.round(Number(p?.price) * 100) / 100 || 0),
         description: str(p?.description, 300),
+        ...(str(p?.category, 60).trim() ? { category: str(p?.category, 60).trim() } : {}),
         active: p?.active !== false,
         sizes: sanitizeOptions(p?.sizes),
         extras: sanitizeOptions(p?.extras),
@@ -161,5 +162,9 @@ export function sanitizeTenant (input: any, current: TenantConfig): TenantConfig
     style: input?.style === 'menu' ? 'menu' : input?.style === 'human' ? 'human' : current.style,
     halfHalf,
     synonyms: sanitizeSynonyms(input?.synonyms, current.synonyms),
+    scheduling: input?.scheduling === undefined ? current.scheduling
+      : input.scheduling?.enabled
+        ? { enabled: true, minDays: Math.min(60, Math.max(0, Math.round(Number(input.scheduling.minDays) || 0))) }
+        : undefined,
   }
 }

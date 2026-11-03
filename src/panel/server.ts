@@ -230,6 +230,7 @@ export function createPanel (deps: PanelDeps) {
         updated.products = sanitized.products
         updated.halfHalf = sanitized.halfHalf
         updated.synonyms = sanitized.synonyms
+        updated.scheduling = sanitized.scheduling
       }
     }
     const newPassword = String(req.body?.newPassword ?? '')

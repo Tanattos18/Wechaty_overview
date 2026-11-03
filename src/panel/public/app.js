@@ -855,7 +855,7 @@ function printOrder (o) {
       .tot { font-size: 15px; font-weight: 700 }
     </style></head><body>
     <h1>${esc(brand)}</h1><div class="c">PEDIDO #${o.number}</div><div class="c">${time(o.createdAt)}</div><hr>
-    <div><b>Cliente:</b> ${esc(o.customerName)}</div><div><b>Entrega:</b> ${esc(o.address)}</div>${o.payment ? `<div><b>Pagamento:</b> ${esc(o.payment)}</div>` : ''}${o.deliveryFee ? `<div><b>Taxa de entrega:</b> ${money(o.deliveryFee)}</div>` : ''}<hr>
+    <div><b>Cliente:</b> ${esc(o.customerName)}</div><div><b>Entrega:</b> ${esc(o.address)}</div>${o.scheduledFor ? `<div><b>Para:</b> ${esc(o.scheduledFor)}</div>` : ''}${o.payment ? `<div><b>Pagamento:</b> ${esc(o.payment)}</div>` : ''}${o.deliveryFee ? `<div><b>Taxa de entrega:</b> ${money(o.deliveryFee)}</div>` : ''}<hr>
     <table>${o.items.map(i => `<tr><td>${i.qty}x ${esc(i.name)}</td><td>${money(i.qty * i.price)}</td></tr>`).join('')}</table><hr>
     <table><tr class="tot"><td>TOTAL</td><td>${money(o.total)}</td></tr></table><hr>
     <div class="c">Status: ${esc(ORDER_LABEL[o.status] ?? o.status)}</div>
@@ -884,7 +884,7 @@ async function renderOrders () {
       <div class="oc-top"><strong>#${o.number}</strong><span class="muted">${hour(o.createdAt)}</span></div>
       <div class="oc-name">${esc(o.customerName)}${o.channel === 'simulator' ? ' <span class="tag">Simulador</span>' : ''}</div>
       <ul class="oc-items">${o.items.map(i => `<li>${i.qty}x ${esc(i.name)}</li>`).join('')}</ul>
-      <div class="oc-addr muted">${esc(o.address)}</div>
+      <div class="oc-addr muted">${esc(o.address)}${o.scheduledFor ? ` · 📅 ${esc(o.scheduledFor)}` : ''}</div>
       <div class="oc-bottom">
         <span class="oc-total">${money(o.total)}</span>
         <span class="row" style="gap:.3rem">
@@ -978,6 +978,7 @@ function productRow (p = { id: '', name: '', price: '', description: '', active:
       <input name="name" value="${esc(p.name)}" placeholder="Produto" aria-label="Produto">
       <input name="price" type="number" min="0" step="0.01" value="${esc(p.price)}" placeholder="Preço" aria-label="Preço">
       <input name="description" value="${esc(p.description ?? '')}" placeholder="Descrição (opcional)" aria-label="Descrição">
+      <input name="category" class="opt-category" value="${esc(p.category ?? '')}" placeholder="Seção do cardápio (opcional): Bolos, Bebidas…" aria-label="Seção do cardápio">
       <label class="check"><input name="active" type="checkbox" ${p.active ? 'checked' : ''}> Ativo</label>
       <button type="button" class="btn small danger remove" aria-label="Remover">✕</button>
       <input name="sizes" class="opt-sizes" value="${esc(optionsText(p.sizes))}" placeholder="Tamanhos (opcional): Média=49,90; Grande=59,90" aria-label="Tamanhos e preços">
@@ -987,7 +988,7 @@ function productRow (p = { id: '', name: '', price: '', description: '', active:
 
 const productFromRow = r => ({
   id: r.dataset.id, name: $('[name=name]', r).value, price: $('[name=price]', r).value,
-  description: $('[name=description]', r).value, active: $('[name=active]', r).checked,
+  description: $('[name=description]', r).value, category: $('[name=category]', r).value, active: $('[name=active]', r).checked,
   sizes: $('[name=sizes]', r).value, extras: $('[name=extras]', r).value,
 })
 
@@ -1003,6 +1004,13 @@ function catalogRulesHtml (c) {
         <option value="off" ${c.halfHalf === 'off' ? 'selected' : ''}>Não fazemos meio a meio</option>
       </select>
       <span class="muted" style="font-weight:400">O bot entende “meio calabresa meio 4 queijos” e calcula o preço.</span>
+    </label>
+    <label>Encomendas (pergunta o dia e o horário no fechamento)
+      <span class="row" style="gap:.5rem;align-items:center">
+        <input type="checkbox" name="scheduling.enabled" ${c.scheduling?.enabled ? 'checked' : ''} aria-label="Trabalha com encomenda">
+        <span style="font-weight:400">Trabalha com encomenda · antecedência mínima</span>
+        <input type="number" name="scheduling.minDays" min="0" max="60" style="width:5rem" value="${esc(c.scheduling?.minDays ?? 1)}" aria-label="Dias de antecedência"> dias
+      </span>
     </label>
     <label>Sinônimos (um por linha: como o cliente fala = nome no cardápio)
       <textarea name="synonyms" rows="4" placeholder="coca=refrigerante&#10;4 queijos=quatro queijos&#10;marguerita=margherita">${esc(syn)}</textarea>
@@ -1114,6 +1122,7 @@ async function renderConfig () {
       products: [...form.querySelectorAll('.product-row')].map(productFromRow),
       halfHalf: v('halfHalf').value,
       synonyms: v('synonyms').value,
+      scheduling: { enabled: v('scheduling.enabled').checked, minDays: v('scheduling.minDays').value },
       ai: { enabled: v('ai.enabled').checked, instructions: v('ai.instructions').value, mode: v('ai.mode').value, agentName: v('ai.agentName').value },
       messages: Object.fromEntries(['welcome', 'fallback', 'humanHandoff', 'humanBack', 'orderConfirmed', 'nonText']
         .map(k => [k, v(`messages.${k}`).value])),

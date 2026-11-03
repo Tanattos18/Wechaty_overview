@@ -29,9 +29,9 @@ describe('Base de conhecimento', () => {
   before(() => { kb.syncFromDir(path.resolve('knowledge/packs')) })
 
 
-  it('carrega os 5 pacotes com pelo menos 20 variações por assunto', () => {
+  it('carrega os 6 pacotes com pelo menos 20 variações por assunto', () => {
     const packs = kb.listPacks()
-    assert.deepEqual(packs.map(p => p.id).sort(), ['comum', 'loja', 'petshop', 'restaurante', 'salao'])
+    assert.deepEqual(packs.map(p => p.id).sort(), ['comum', 'confeitaria', 'loja', 'petshop', 'restaurante', 'salao'])
     for (const p of packs) {
       const pack = kb.getPack(p.id)!
       for (const topic of pack.topics) assert.ok(topic.questions.length >= 20, `${p.id}/${topic.key} tem ${topic.questions.length}`)

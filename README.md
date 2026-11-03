@@ -130,6 +130,20 @@ com **85 assuntos e ~1.700 formas de perguntar**, em 5 pacotes:
   sem tamanho, o bot pergunta. Pizza meio a meio cobra o sabor mais caro, a média, ou fica desligada.
 - **Sinônimos por cliente** (Configuração): `coca=refrigerante`, `4 queijos=quatro queijos`…
 
+## Cadastrar um cliente pelo Catálogo Digital
+
+Para clientes que já têm o site de catálogo (o `dados.json` editado pelo painel do catálogo), o bot é cadastrado com tudo o que ele vende, **sem conectar o WhatsApp**:
+
+```bash
+npm run client:import -- https://raw.githubusercontent.com/<usuario>/<repositorio>/main/dados.json <id-do-cliente>
+pm2 restart chatbot
+```
+
+- Traz empresa, horários, endereço, cardápio por seção (preço por unidade, por cento ou **por kg com pesos**, massas como adicional), entrega, taxa, formas de pagamento, encomendas com antecedência e as respostas do Conhecimento (pacote **confeitaria** para bolos e doces).
+- Já deixa a conversa organizada para o ramo (mensagens, menu, instruções da IA) e a IA no modo funcionária.
+- Depois que o catálogo mudar, rode de novo com `--update`: troca cardápio e informações e mantém senha, IA, mensagens e respostas personalizadas.
+- A senha do painel do cliente é definida pelo Super Admin em **Configuração**. O WhatsApp só conecta quando alguém ler o QR Code em **Conexão** (bots que nunca foram conectados não sobem sozinhos).
+
 ## Ordem do atendimento
 
 O bot (pelas regras ou pela IA) segue sempre a mesma estrutura:

@@ -20,6 +20,8 @@ export interface Product {
   /** Preço base (usado quando o produto não tem tamanhos). */
   price: number
   description?: string
+  /** Seção do cardápio (ex.: "Bolos confeitados"); o catálogo agrupa por ela. */
+  category?: string
   active: boolean
   /** Tamanhos com preço próprio (ex.: Média R$ 49,90, Grande R$ 59,90). O bot pergunta se o cliente não disser. */
   sizes?: ProductOption[]
@@ -76,6 +78,8 @@ export interface TenantConfig {
   }
   menu: MenuOption[]
   products: Product[]
+  /** Encomendas: o fechamento pergunta o dia e o horário, com antecedência mínima. */
+  scheduling?: { enabled: boolean; minDays: number }
   ai: {
     enabled: boolean
     instructions: string
@@ -120,6 +124,7 @@ export type ChatState =
   | 'catalog'
   | 'checkout_name'
   | 'checkout_address'
+  | 'checkout_when'
   | 'checkout_payment'
   | 'checkout_confirm'
   | 'human'
@@ -151,7 +156,7 @@ export interface Conversation {
   channel: Channel
   state: ChatState
   cart: CartItem[]
-  checkout: { name?: string; address?: string; payment?: string; addressTries?: number; paymentTries?: number; askChange?: boolean }
+  checkout: { name?: string; address?: string; when?: string; whenTries?: number; payment?: string; addressTries?: number; paymentTries?: number; askChange?: boolean }
   humanSince?: string
   needsAgent: boolean
   /** Mensagens seguidas que o bot não entendeu. */
@@ -186,6 +191,8 @@ export interface Order {
   address: string
   /** Forma de pagamento informada na conversa. */
   payment?: string
+  /** Dia e horário combinados (encomendas). */
+  scheduledFor?: string
   /** Taxa de entrega somada ao total (quando cadastrada como valor). */
   deliveryFee?: number
   items: CartItem[]
