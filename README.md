@@ -137,12 +137,12 @@ O bot (pelas regras ou pela IA) segue sempre a mesma estrutura:
 1. **Início (contato):** saudação pelo período do dia e pelo nome, diz de onde fala e pergunta como ajudar.
 2. **Meio (conversa):** dúvidas, cardápio, ajuda para escolher e itens anotados. Depois de cada item: "Quer mais alguma coisa?".
 3. **Fim (fechamento)**, quando o cliente diz que terminou ("finalizar", "só isso", "isso"), um passo por mensagem e pulando o que ele já informou:
-   1. confere o pedido mínimo (variável );
+   1. confere o pedido mínimo (variável `pedido_minimo`);
    2. confirma o nome (já sugere o do WhatsApp);
    3. entrega (rua, número e bairro) ou retirada;
-   4. forma de pagamento (aceita só as de ; em dinheiro, pergunta o troco);
-   5. resumo com itens, subtotal, taxa de entrega (, quando for um valor), total, nome, entrega e pagamento;
-   6. só depois do "sim": registra o pedido, informa o número e, se for Pix, manda a chave ().
+   4. forma de pagamento (aceita só as de `formas_pagamento`; em dinheiro, pergunta o troco);
+   5. resumo com itens, subtotal, taxa de entrega (`taxa_entrega`, quando for um valor), total, nome, entrega e pagamento;
+   6. só depois do "sim": registra o pedido, informa o número e, se for Pix, manda a chave (`chave_pix`).
 
 ## Treinar e medir a qualidade
 
