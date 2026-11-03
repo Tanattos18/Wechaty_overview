@@ -26,7 +26,7 @@ npm start                # painel em http://localhost:3000
 
 - **Admin:** entre com o ID em branco e a `ADMIN_PASSWORD` do `.env`.
 - **Cliente:** o admin define a senha em *Configuração → Acesso ao painel*; o cliente entra com o ID (ex.: `demo`).
-- Já existe um cliente de exemplo: **Pizzaria Demo** (`data/clients/demo.json`). Teste pelo **Simulador**.
+- Já existe um cliente de exemplo: **Pizzaria Demo** (`examples/clients/demo.json`, copiado para `data/clients` na primeira vez). Teste pelo **Simulador**.
 
 ```bash
 npm test          # testes do motor (menu, pedido, transferência, IA, falhas)
