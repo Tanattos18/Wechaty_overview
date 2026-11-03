@@ -2,38 +2,68 @@
 <html lang="pt-BR">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Painel ChatBot</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0f9d7a">
+  <title>Painel</title>
+  <link id="favicon" rel="icon" href="data:,">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
   <!-- Login -->
   <section id="login" class="login hidden">
-    <form id="login-form" class="card login-card">
-      <h1>🤖 Painel ChatBot</h1>
-      <p class="muted">Entre com o ID do seu negócio e a senha.<br>Administrador: use o ID <b>admin</b> (ou deixe em branco).</p>
-      <label>ID do negócio<input name="tenantId" autocomplete="username" placeholder="ex.: pizzaria-bella"></label>
-      <label>Senha<input name="password" type="password" autocomplete="current-password" required></label>
-      <button class="btn primary" type="submit">Entrar</button>
-      <p id="login-error" class="error"></p>
-    </form>
+    <div class="login-hero">
+      <div class="brand big"><span data-brand-logo></span><span data-brand-name></span></div>
+      <div class="hero-copy">
+        <h1>Seu WhatsApp atendendo<br>24 horas por dia.</h1>
+        <p>Respostas na hora, pedidos anotados e a sua equipe entrando só quando precisa.</p>
+        <ul class="hero-points">
+          <li>Responde horário, preços, entrega e pagamento</li>
+          <li>Anota pedidos direto na conversa</li>
+          <li>Chama um atendente quando o cliente pede</li>
+        </ul>
+      </div>
+      <div class="hero-chat" aria-hidden="true">
+        <div class="bubble customer"><div class="txt">Oi! Vocês entregam no centro?</div><span class="t">19:02</span></div>
+        <div class="bubble bot"><div class="txt">Boa noite! 😊 Entregamos sim, em até 45 min. Quer ver o cardápio?</div><span class="t">19:02 <span class="ticks">✓✓</span></span></div>
+        <div class="bubble customer"><div class="txt">Quero 2 calabresa 🍕</div><span class="t">19:03</span></div>
+      </div>
+    </div>
+    <div class="login-side">
+      <form id="login-form" class="login-card">
+        <div class="brand mobile-only"><span data-brand-logo></span><span data-brand-name></span></div>
+        <h2>Entrar no painel</h2>
+        <p class="muted">Use o ID do seu negócio e a senha. Administrador: ID <b>admin</b>.</p>
+        <label>ID do negócio<input name="tenantId" autocomplete="username" placeholder="ex.: pizzaria-bella"></label>
+        <label>Senha<input name="password" type="password" autocomplete="current-password" required></label>
+        <button class="btn primary block" type="submit">Entrar</button>
+        <p id="login-error" class="error" role="alert"></p>
+      </form>
+    </div>
   </section>
 
   <!-- App -->
   <div id="app" class="layout hidden">
     <aside class="sidebar">
-      <div class="brand">🤖 ChatBot</div>
-      <nav id="nav">
-        <button data-tab="clients" data-admin>👥 Clientes</button>
-        <button data-tab="connection">📱 Conexão</button>
-        <button data-tab="chats">💬 Conversas <span id="badge-chats" class="badge hidden"></span></button>
-        <button data-tab="orders">🧾 Pedidos <span id="badge-orders" class="badge hidden"></span></button>
-        <button data-tab="knowledge">📚 Conhecimento <span id="badge-knowledge" class="badge hidden"></span></button>
-        <button data-tab="config">⚙️ Configuração</button>
-        <button data-tab="simulator">🧪 Simulador</button>
-        <button data-tab="requests">📝 Ajustes <span id="badge-requests" class="badge hidden"></span></button>
+      <div class="brand"><span data-brand-logo></span><span data-brand-name></span></div>
+      <nav id="nav" aria-label="Menu">
+        <button data-tab="home" data-icon="home"><span class="lbl">Início</span></button>
+        <button data-tab="clients" data-icon="users"><span class="lbl">Clientes</span></button>
+        <button data-tab="chats" data-icon="chat"><span class="lbl">Conversas</span><span id="badge-chats" class="badge hidden"></span></button>
+        <button data-tab="orders" data-icon="orders"><span class="lbl">Pedidos</span><span id="badge-orders" class="badge hidden"></span></button>
+        <button data-tab="connection" data-icon="phone"><span class="lbl">Conexão</span></button>
+        <button data-tab="knowledge" data-icon="book"><span class="lbl">Conhecimento</span><span id="badge-knowledge" class="badge hidden"></span></button>
+        <button data-tab="config" data-icon="settings"><span class="lbl">Configuração</span></button>
+        <button data-tab="simulator" data-icon="flask"><span class="lbl">Simulador</span></button>
+        <button data-tab="requests" data-icon="clipboard"><span class="lbl">Ajustes</span><span id="badge-requests" class="badge hidden"></span></button>
       </nav>
-      <button id="logout" class="btn ghost small">Sair</button>
+      <div class="user-box">
+        <span id="user-avatar"></span>
+        <span class="user-text"><strong id="user-name"></strong><span id="user-role" class="muted"></span></span>
+        <button id="logout" class="btn icon-btn ghost" title="Sair" aria-label="Sair"></button>
+      </div>
     </aside>
 
     <main class="main">
@@ -42,10 +72,15 @@
         <button id="impersonation-stop" class="btn small">Voltar ao Super Admin</button>
       </div>
       <header class="topbar">
-        <h2 id="title"></h2>
-        <div class="tenant-picker">
-          <select id="tenant-select" aria-label="Cliente"></select>
-          <button id="new-tenant" class="btn small hidden">+ Novo cliente</button>
+        <div class="brand mobile-only"><span data-brand-logo></span></div>
+        <h1 id="title"></h1>
+        <div class="top-actions">
+          <div class="tenant-picker">
+            <select id="tenant-select" aria-label="Cliente"></select>
+            <button id="new-tenant" class="btn small hidden">Novo cliente</button>
+          </div>
+          <button id="alerts-toggle" class="btn icon-btn ghost" aria-label="Avisos"></button>
+          <button id="theme-toggle" class="btn icon-btn ghost" aria-label="Tema"></button>
         </div>
       </header>
       <div id="view" class="view"></div>
@@ -75,7 +110,19 @@
     </form>
   </dialog>
 
-  <div id="toast" class="toast hidden"></div>
+  <dialog id="quick-dialog">
+    <form method="dialog" id="quick-form" class="stack">
+      <h3>Respostas rápidas</h3>
+      <p class="muted">Uma frase por linha. Clique numa resposta na conversa para preencher a mensagem.</p>
+      <textarea id="quick-text" rows="8"></textarea>
+      <div class="row end">
+        <button value="cancel" class="btn ghost" formnovalidate>Cancelar</button>
+        <button value="ok" class="btn primary">Salvar</button>
+      </div>
+    </form>
+  </dialog>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
   <script src="app.js" type="module"></script>
 </body>
 </html>

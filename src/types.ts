@@ -80,6 +80,8 @@ export interface TenantConfig {
   suspended?: boolean
   /** O que o próprio cliente pode editar no painel (o resto fica com o Super Admin). */
   clientCan?: ClientPermissions
+  /** Frases prontas para o atendente responder com um clique. */
+  quickReplies?: string[]
   /** Plano contratado: quantos ajustes por mês estão incluídos na mensalidade. */
   plan?: { name: string; adjustmentsPerMonth: number }
   /** Base de conhecimento: pacotes ativos, informações do negócio e respostas personalizadas. */

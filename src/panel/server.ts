@@ -24,6 +24,7 @@ export interface PanelDeps {
 }
 
 const here = path.dirname(fileURLToPath(import.meta.url))
+const DAY_FMT = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo' }) // AAAA-MM-DD
 const ADMIN_LOGIN = 'admin'
 
 /** Remove o hash da senha antes de mandar ao navegador. */
@@ -61,6 +62,14 @@ export function createPanel (deps: PanelDeps) {
     if (!tenant) res.status(404).json({ error: 'Cliente não encontrado.' })
     return tenant
   }
+
+  // ---------- marca (pública: usada na tela de login) ----------
+
+  const brand = {
+    name: (process.env.BRAND_NAME ?? '').trim().slice(0, 40) || 'Akylla Bot',
+    color: /^#[0-9a-f]{6}$/i.test(process.env.BRAND_COLOR ?? '') ? process.env.BRAND_COLOR! : '#0f9d7a',
+  }
+  app.get('/api/brand', (_req, res) => { res.json(brand) })
 
   // ---------- login ----------
 
@@ -402,6 +411,78 @@ export function createPanel (deps: PanelDeps) {
     if (!tenant) return
     knowledge.deleteUnanswered(tenant.id, Number(req.params.id))
     res.json({ ok: true })
+  })
+
+  // ---------- painel inicial ----------
+
+  /** Números do dia e dos últimos 7 dias (horário de Brasília). */
+  const stats = (tenant: TenantConfig) => {
+    const day = (d: Date | string) => DAY_FMT.format(new Date(d))
+    const today = day(new Date())
+    const last7 = Array.from({ length: 7 }, (_, i) => day(new Date(Date.now() - (6 - i) * 86_400_000)))
+    const conversations = store.listConversations(tenant.id).filter(c => c.channel === 'whatsapp' || c.channel === 'simulator')
+    const orders = store.listOrders(tenant.id).filter(o => o.status !== 'cancelado')
+    const messagesByDay = Object.fromEntries(last7.map(d => [d, 0]))
+    const ordersByDay = Object.fromEntries(last7.map(d => [d, 0]))
+    let conversationsToday = 0
+    for (const c of conversations) {
+      let talkedToday = false
+      for (const m of c.messages) {
+        if (m.from !== 'customer') continue
+        const d = day(m.at)
+        if (d in messagesByDay) messagesByDay[d]++
+        if (d === today) talkedToday = true
+      }
+      if (talkedToday) conversationsToday++
+    }
+    for (const o of orders) {
+      const d = day(o.createdAt)
+      if (d in ordersByDay) ordersByDay[d]++
+    }
+    const todayOrders = orders.filter(o => day(o.createdAt) === today)
+    return {
+      conversationsToday,
+      messagesToday: messagesByDay[today] ?? 0,
+      ordersToday: todayOrders.length,
+      revenueToday: Math.round(todayOrders.reduce((s, o) => s + o.total, 0) * 100) / 100,
+      waitingAgent: conversations.filter(c => c.needsAgent).length,
+      newOrders: store.listOrders(tenant.id).filter(o => o.status === 'novo').length,
+      unanswered: deps.knowledge.listUnanswered(tenant.id).length,
+      bot: bots.info(tenant.id).status,
+      days: last7.map(d => ({ day: d, messages: messagesByDay[d], orders: ordersByDay[d] })),
+    }
+  }
+
+  app.get('/api/tenants/:tenantId/stats', auth.required, (req, res) => {
+    const tenant = tenantOr404(req, res)
+    if (tenant) res.json(stats(tenant))
+  })
+
+  /** Resumo de todos os clientes para o Super Admin. */
+  app.get('/api/overview', auth.required, auth.adminOnly, (_req, res) => {
+    const tenants = store.listTenants()
+    const each = tenants.map(t => ({ id: t.id, name: t.name, suspended: Boolean(t.suspended), ...stats(t) }))
+    res.json({
+      clients: tenants.length,
+      online: each.filter(t => t.bot === 'online').length,
+      suspended: each.filter(t => t.suspended).length,
+      pendingRequests: tenants.reduce((s, t) => s + store.listRequests(t.id).filter(r => r.status === 'aberto' || r.status === 'andamento').length, 0),
+      conversationsToday: each.reduce((s, t) => s + t.conversationsToday, 0),
+      ordersToday: each.reduce((s, t) => s + t.ordersToday, 0),
+      revenueToday: Math.round(each.reduce((s, t) => s + t.revenueToday, 0) * 100) / 100,
+      tenants: each,
+    })
+  })
+
+  // ---------- respostas rápidas do atendente ----------
+
+  app.put('/api/tenants/:tenantId/quick-replies', auth.required, (req, res) => {
+    const tenant = tenantOr404(req, res)
+    if (!tenant) return
+    const list = Array.isArray(req.body?.quickReplies) ? req.body.quickReplies : []
+    const quickReplies = list.filter((q: unknown) => typeof q === 'string' && q.trim()).map((q: string) => q.trim().slice(0, 500)).slice(0, 20)
+    store.saveTenant({ ...tenant, quickReplies })
+    res.json({ quickReplies })
   })
 
   // ---------- pedidos de ajuste ----------

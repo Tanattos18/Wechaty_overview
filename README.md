@@ -65,6 +65,18 @@ WhatsApp**, o QR Code aparece no painel; depois de escaneado, a sessão fica sal
 ⚠️ Conectores **não oficiais** (QR Code) violam os Termos do WhatsApp e podem levar ao banimento do
 número. Para clientes pagantes, considere a API oficial.
 
+## Visual do painel
+
+- **Marca configurável:** `BRAND_NAME` e `BRAND_COLOR` no `.env` mudam o nome, a cor, o logo e o ícone da aba.
+- **Início:** números do dia (conversas, pedidos e faturamento, quem aguarda atendente, perguntas sem resposta)
+  e gráficos dos últimos 7 dias; o Super Admin vê também o resumo de todos os clientes.
+- **Conversas no estilo WhatsApp:** bolhas, separador de datas, avatares, busca, filtros e **respostas rápidas** editáveis.
+- **Pedidos em quadro:** colunas Novo → Confirmado → Preparando → Saiu para entrega → Concluído (arrastar ou escolher na lista)
+  e **impressão** do pedido em formato de cupom (80 mm).
+- **Avisos:** o sino no topo liga som e notificação do navegador para pedido novo e cliente pedindo atendente.
+- **Simulador num celular desenhado**, tema **claro/escuro/automático**, menu inferior no celular, carregamento animado
+  e aviso de alterações não salvas.
+
 ## Super Admin e clientes
 
 | Perfil | Login | O que faz |
