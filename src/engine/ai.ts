@@ -1,8 +1,9 @@
 import Anthropic from '@anthropic-ai/sdk'
-import type { AiResponder, Conversation, TenantConfig } from '../types.js'
+import type { AiResponder, AiResult, Conversation, TenantConfig } from '../types.js'
 import { formatPrice } from './engine.js'
 
 const HISTORY_LIMIT = 16
+const HANDOFF_MARK = '[ATENDENTE]'
 
 const HANDOFF_TOOL: Anthropic.Beta.BetaTool = {
   name: 'transferir_para_atendente',
@@ -18,37 +19,44 @@ const HANDOFF_TOOL: Anthropic.Beta.BetaTool = {
 }
 
 /** Texto estável por cliente: fica no cache de prompt entre as mensagens. */
-function systemPrompt (tenant: TenantConfig): string {
+export function systemPrompt (tenant: TenantConfig): string {
+  const option = (o: { name: string, price: number }) => `${o.name} ${formatPrice(o.price)}`
   const products = tenant.products.filter(p => p.active)
-    .map(p => `- ${p.name}: ${formatPrice(p.price)}${p.description ? ` (${p.description})` : ''}`)
+    .map(p => `- ${p.name}: ${formatPrice(p.price)}${p.description ? ` (${p.description})` : ''}` +
+      (p.sizes?.length ? ` | tamanhos: ${p.sizes.map(option).join(', ')}` : '') +
+      (p.extras?.length ? ` | adicionais: ${p.extras.map(option).join(', ')}` : ''))
     .join('\n') || '(sem produtos cadastrados)'
-  const menu = tenant.menu.map(o => `${o.key} - ${o.label}`).join('\n')
+  const variables = Object.entries(tenant.knowledge?.variables ?? {})
+    .filter(([, v]) => v).map(([k, v]) => `${k.replace(/_/g, ' ')}: ${v}`).join('\n')
 
-  return `Você é o assistente virtual de WhatsApp da empresa "${tenant.name}". Atende clientes finais em português do Brasil.
+  return `Você é atendente de WhatsApp da empresa "${tenant.name}". Atende clientes finais em português do Brasil, como uma pessoa da equipe.
 
 Como responder:
-- Mensagens curtas, cordiais e diretas, no estilo de WhatsApp (no máximo 3 parágrafos curtos). Pode usar *negrito* do WhatsApp; não use Markdown de títulos ou tabelas.
-- Use somente as informações abaixo. Não invente preços, prazos, promoções ou políticas. Se não souber, diga que vai chamar um atendente e use a ferramenta transferir_para_atendente.
-- Para fazer pedidos, oriente o cliente a digitar *menu* e escolher a opção do catálogo — você não registra pedidos.
-- Se o cliente pedir para falar com uma pessoa ou estiver insatisfeito, use transferir_para_atendente.
+- Mensagens curtas, simpáticas e naturais, no estilo de WhatsApp (no máximo 3 parágrafos curtos, 1 emoji no máximo). Pode usar *negrito* do WhatsApp; não use Markdown de títulos, listas longas ou tabelas.
+- Não diga que é uma IA, robô ou assistente virtual, a não ser que perguntem diretamente.
+- Use somente as informações abaixo. Nunca invente preços, prazos, promoções, endereços ou políticas. Se algo não estiver nas informações, não afirme nem negue: diga que vai confirmar com a equipe.
+- Pedidos são anotados pelo sistema quando o cliente escreve o produto e a quantidade (ex.: "quero 2 calabresa"). Você não anota pedidos: se o cliente quiser pedir, indique o produto e convide-o a escrever assim. Para fechar o pedido ele escreve *finalizar*.
+- Se o cliente pedir para falar com uma pessoa, reclamar, ou perguntar algo que as informações não respondem, responda o que souber e termine a mensagem com a marca ${HANDOFF_MARK} (ela chama um atendente e não aparece para o cliente; o sistema já avisa o cliente, então não repita que vai chamar alguém).
 
 <negocio>
 Descrição: ${tenant.business.description}
 Horário de funcionamento: ${tenant.business.hours}
 Endereço: ${tenant.business.address}
 Telefone: ${tenant.business.phone}
-Informações adicionais e perguntas frequentes:
+${variables ? `${variables}\n` : ''}Informações adicionais e perguntas frequentes:
 ${tenant.business.extraInfo}
 </negocio>
 
 <produtos>
 ${products}
 </produtos>
-
-<menu_do_bot>
-${menu}
-</menu_do_bot>
 ${tenant.ai.instructions ? `\nInstruções específicas da empresa:\n${tenant.ai.instructions}\n` : ''}`
+}
+
+/** Pedido em andamento, para a IA não perder o contexto. */
+function cartNote (conv: Conversation): string {
+  if (!conv.cart.length) return ''
+  return `\n\nPedido anotado até agora nesta conversa: ${conv.cart.map(i => `${i.qty}x ${i.name}`).join(', ')}.`
 }
 
 /** Converte o histórico da conversa em mensagens da API (cliente = user; bot/atendente = assistant). */
@@ -77,7 +85,7 @@ export function createClaudeResponder (model: string): AiResponder {
       betas: ['server-side-fallback-2026-07-01'],
       fallbacks: 'default',
       output_config: { effort: 'low' },
-      system: [{ type: 'text', text: systemPrompt(tenant), cache_control: { type: 'ephemeral' } }],
+      system: [{ type: 'text', text: systemPrompt(tenant), cache_control: { type: 'ephemeral' } }, { type: 'text', text: cartNote(conv) || ' ' }],
       tools: [HANDOFF_TOOL],
       tool_choice: { type: 'auto' },
       messages,
@@ -91,7 +99,48 @@ export function createClaudeResponder (model: string): AiResponder {
       .flatMap(b => (b.type === 'text' ? [b.text] : []))
       .join('\n')
       .trim()
-    const handoff = response.content.some(b => b.type === 'tool_use' && b.name === HANDOFF_TOOL.name)
-    return { text, handoff }
+    const parsed = parseReply(text)
+    const handoff = parsed.handoff || response.content.some(b => b.type === 'tool_use' && b.name === HANDOFF_TOOL.name)
+    return { text: parsed.text, handoff }
+  }
+}
+
+/** Separa a marca de transferência do texto que vai para o cliente. */
+export function parseReply (raw: string): AiResult {
+  const handoff = raw.includes(HANDOFF_MARK)
+  const text = raw.replaceAll(HANDOFF_MARK, '').replace(/<think>[\s\S]*?<\/think>/g, '').trim()
+  return { text, handoff }
+}
+
+/**
+ * IA pelo OpenRouter (API compatível com OpenAI). `models` é a lista de modelos em ordem de
+ * preferência: se o primeiro estiver fora do ar ou no limite, o OpenRouter usa o próximo.
+ */
+export function createOpenRouterResponder (apiKey: string, models: string[]): AiResponder {
+  return async (tenant, conv) => {
+    const history = toMessages(conv)
+    if (history.length === 0) return { text: '', handoff: false }
+
+    const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json', 'X-Title': 'SaaS ChatBot' },
+      body: JSON.stringify({
+        models,
+        max_tokens: 1500,
+        temperature: 0.6,
+        reasoning: { effort: 'low', exclude: true },
+        messages: [
+          { role: 'system', content: systemPrompt(tenant) + cartNote(conv) },
+          ...history,
+        ],
+      }),
+      signal: AbortSignal.timeout(45_000),
+    })
+    const data = await res.json().catch(() => ({})) as {
+      choices?: { message?: { content?: string | null } }[]
+      error?: { message?: string }
+    }
+    if (!res.ok) throw new Error(`OpenRouter ${res.status}: ${data.error?.message ?? 'erro'}`)
+    return parseReply(data.choices?.[0]?.message?.content ?? '')
   }
 }

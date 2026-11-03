@@ -11,7 +11,7 @@ Chatbot de WhatsApp para vários clientes (negócios), inspirado na arquitetura 
 | **Menu de atendimento** | Opções numeradas e configuráveis por cliente (resposta fixa, catálogo, IA ou atendente). Comandos sempre disponíveis: `menu`, `atendente`, `cancelar`. |
 | **Catálogo e pedidos** | Lista de produtos → `2` ou `2 x3` adiciona ao carrinho → `finalizar` → nome → endereço (ou `retirar`) → `SIM`. O pedido aparece no painel. |
 | **Conversa natural (sem IA)** | Entende saudações a qualquer momento ("oi", "bom dia, tudo bem?"), agradecimentos e despedidas; responde horário, endereço, telefone, entrega e pagamento; busca respostas no FAQ do negócio; informa preços e aceita pedidos escritos ("quero 2 calabresa e 1 refri"), tolerando erros de digitação. Regras em `src/engine/nlu.ts`. |
-| **Respostas com IA** | Perguntas livres são respondidas pelo Claude **apenas** com os dados do negócio (descrição, horário, FAQ, produtos). Se não souber, ou se o cliente pedir, transfere para um atendente. |
+| **Respostas com IA** | O que as regras e a base de conhecimento não entendem vai para a IA — **OpenRouter** (modelos gratuitos, `OPENROUTER_API_KEY`) ou Claude (`ANTHROPIC_API_KEY`, plano premium). Ela responde **apenas** com os dados do negócio, sabe o pedido em andamento e, se não souber ou o cliente pedir, transfere para um atendente. Pedidos continuam sendo anotados pelo sistema (preço sempre certo). |
 | **Atendimento humano** | O bot pausa na conversa transferida; o atendente responde pelo painel e devolve a conversa ao bot. Se ninguém responder, o bot volta sozinho depois de N minutos. |
 | **Painel do cliente** | Conexão (QR Code), Conversas, Pedidos (com status), Configuração e **Simulador** para testar o bot sem WhatsApp. |
 | **Multi-cliente** | O administrador cria clientes; cada cliente entra no painel com o próprio ID e senha e só vê os próprios dados. |
@@ -20,7 +20,7 @@ Chatbot de WhatsApp para vários clientes (negócios), inspirado na arquitetura 
 
 ```bash
 npm install
-cp .env.example .env     # preencha ADMIN_PASSWORD, SESSION_SECRET e ANTHROPIC_API_KEY
+cp .env.example .env     # preencha ADMIN_PASSWORD, SESSION_SECRET e OPENROUTER_API_KEY
 npm start                # painel em http://localhost:3000
 ```
 
@@ -39,7 +39,7 @@ npm run typecheck
 src/
   engine/engine.ts      motor do bot (menu, catálogo, carrinho, checkout, transferência)
   engine/nlu.ts         entendimento sem IA (intenções, produtos por nome, busca no FAQ)
-  engine/ai.ts          respostas com Claude + ferramenta "transferir_para_atendente"
+  engine/ai.ts          respostas com IA (OpenRouter ou Claude) e transferência para atendente
   channels/whatsapp.ts  conector WhatsApp via whatsapp-web.js (um bot por cliente)
   panel/server.ts       API do painel (login, config, conversas, pedidos, simulador)
   panel/auth.ts         senhas (scrypt) e sessão por cookie assinado
@@ -160,7 +160,7 @@ Veja o passo a passo para a VPS da Hostinger em [DEPLOY.md](DEPLOY.md).
 
 ## Observações
 
-- **IA:** sem `ANTHROPIC_API_KEY`, o bot funciona normalmente e só responde com o menu nas perguntas livres.
+- **IA:** sem `OPENROUTER_API_KEY` nem `ANTHROPIC_API_KEY`, o bot funciona normalmente e só responde com o menu nas perguntas livres.
   `CLAUDE_MODEL=claude-haiku-5-5` reduz bastante o custo em alto volume.
 - **Navegador:** o npm 11 não executa o download do Chromium; o conector usa o Edge/Chrome de `BROWSER_PATH`.
 - **OneDrive:** `node_modules`, `data/runtime` e as sessões do WhatsApp geram muitos arquivos.

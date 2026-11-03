@@ -79,7 +79,7 @@
   ],
   "ai": {
     "enabled": true,
-    "instructions": "Sugira o cardápio (opção 1 do menu) quando o cliente demonstrar interesse em pedir."
+    "instructions": "Quando o cliente demonstrar interesse em pedir, sugira uma pizza e convide a escrever o pedido (ex.: quero 1 calabresa)."
   },
   "humanTimeoutMin": 30,
   "knowledge": {

@@ -366,7 +366,9 @@ export class Engine {
         if (wantsOthers) replies.push(this.optionsSummary(tenant, conv))
         return { replies }
       }
-      if (REF_RE.test(n) && (has('price') || isQuestion)) return { replies: [this.describeProduct(refTarget, conv, n)] }
+      // "pra ela" / frase longa sem preço fala de uma pessoa, não do produto ("opção pra ela?")
+      const aboutProduct = has('price') || (isQuestion && n.split(' ').length <= 5 && !/\b(pra|para) (ela|ele)\b/.test(n))
+      if (REF_RE.test(n) && aboutProduct) return { replies: [this.describeProduct(refTarget, conv, n)] }
     }
     // "tem outro sabor?", "só tem esses?", "teria outras": lista curta do que existe
     if (wantsOthers) return { replies: [this.optionsSummary(tenant, conv)] }

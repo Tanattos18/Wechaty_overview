@@ -6,6 +6,7 @@ import { after, describe, it } from 'node:test'
 import { Engine } from '../src/engine/engine.js'
 import { KnowledgeBase } from '../src/knowledge/kb.js'
 import { exportConversations, qualityStats, runQa, runSavedTests } from '../src/quality/quality.js'
+import { parseReply, systemPrompt } from '../src/engine/ai.js'
 import { replay } from '../src/quality/replay.js'
 import { Store } from '../src/store.js'
 import type { TenantConfig } from '../src/types.js'
@@ -205,5 +206,27 @@ describe('10. Conversa salva como teste', () => {
     const [r] = await runSavedTests(kb, tenant, [test])
     assert.equal(r.ok, false)
     assert.match(r.diffs[0].got, /nova-chave@pix\.com/)
+  })
+})
+
+describe('IA (OpenRouter)', () => {
+  it('a marca [ATENDENTE] chama atendente e some do texto', () => {
+    assert.deepEqual(parseReply('Vou confirmar com a equipe. [ATENDENTE]'), { text: 'Vou confirmar com a equipe.', handoff: true })
+    assert.deepEqual(parseReply('<think>hmm</think>Temos sim!'), { text: 'Temos sim!', handoff: false })
+  })
+
+  it('"opção pra ela" fala de uma pessoa, não do último produto', async () => {
+    const t = setup()
+    await t.say('oi')
+    await t.say('quero 1 calabresa')
+    assert.doesNotMatch(await t.say('minha filha é alérgica a lactose, alguma opção pra ela?'), /Calabresa\* sai por/)
+    assert.match(await t.say('quanto custa ela?'), /Pizza Calabresa\* sai por/)
+  })
+
+  it('o prompt leva produtos, variáveis e as regras de pedido', () => {
+    const p = systemPrompt(demo())
+    assert.match(p, /Pizza Calabresa: R\$\s?52,90/)
+    assert.match(p, /pix@pizzariademo/)
+    assert.match(p, /\[ATENDENTE\]/)
   })
 })

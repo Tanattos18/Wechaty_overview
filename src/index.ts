@@ -1,6 +1,6 @@
 import path from 'node:path'
 import { BotManager } from './channels/whatsapp.js'
-import { createClaudeResponder } from './engine/ai.js'
+import { createClaudeResponder, createOpenRouterResponder } from './engine/ai.js'
 import { Engine } from './engine/engine.js'
 import { KnowledgeBase } from './knowledge/kb.js'
 import { createPanel } from './panel/server.js'
@@ -26,12 +26,22 @@ const knowledge = new KnowledgeBase(path.join(dataDir, 'knowledge.db'))
 const updatedPacks = knowledge.syncFromDir(path.resolve('knowledge/packs'))
 if (updatedPacks.length) console.log(`[conhecimento] pacotes carregados: ${updatedPacks.join(', ')}`)
 
-// A IA só é usada com chave configurada; sem ela o bot responde pela base de conhecimento
-const aiEnabled = env.AI_ENABLED !== 'false' && Boolean(env.ANTHROPIC_API_KEY)
+// A IA só é usada com chave configurada; sem ela o bot responde pela base de conhecimento.
+// OpenRouter tem prioridade (modelos gratuitos); Claude fica para o plano premium.
+const DEFAULT_OPENROUTER_MODELS = 'nvidia/nemotron-3.5-super-vl:free,nvidia/nemotron-3-ultra-550b-a55b:free,google/gemma-4-31b-it:free'
+const aiOn = env.AI_ENABLED !== 'false'
+const ai = !aiOn
+  ? undefined
+  : env.OPENROUTER_API_KEY
+    ? createOpenRouterResponder(env.OPENROUTER_API_KEY, (env.OPENROUTER_MODELS || DEFAULT_OPENROUTER_MODELS).split(',').map(m => m.trim()).filter(Boolean))
+    : env.ANTHROPIC_API_KEY
+      ? createClaudeResponder(env.CLAUDE_MODEL ?? 'claude-opus-5-5')
+      : undefined
+if (ai) console.log(`[ia] ligada via ${env.OPENROUTER_API_KEY ? 'OpenRouter' : 'Claude'}`)
 const engine = new Engine({
   store,
   knowledge,
-  ai: aiEnabled ? createClaudeResponder(env.CLAUDE_MODEL ?? 'claude-opus-5-5') : undefined,
+  ai,
   onOrder: (tenantId, orderId) => console.log(`[pedido] ${tenantId}: novo pedido ${orderId}`),
 })
 const bots = new BotManager(engine, store, {
