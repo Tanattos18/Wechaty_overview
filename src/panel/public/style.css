@@ -129,6 +129,17 @@ td select { width: auto; }
 .check input { width: auto; }
 .save-bar { position: sticky; bottom: 0; background: var(--bg); padding: .8rem 0; display: flex; justify-content: flex-end; gap: .6rem; }
 
+/* Super Admin: clientes, ajustes e "ver como cliente" */
+.impersonation { background: var(--warn); color: #fff; padding: .55rem 1.5rem; display: flex; gap: 1rem; align-items: center; justify-content: space-between; flex-wrap: wrap; font-weight: 600; }
+.impersonation .btn { color: var(--text); }
+table.clients td { vertical-align: top; }
+table.clients .check { font-weight: 500; font-size: .88rem; margin: .15rem 0; }
+table.clients .actions { display: flex; flex-direction: column; gap: .35rem; align-items: stretch; min-width: 150px; }
+table.clients tr.suspended td:not(.actions) { opacity: .6; }
+.request-text { white-space: pre-wrap; }
+.request-item { border-bottom: 1px solid var(--border); padding: .7rem 0; display: grid; gap: .3rem; }
+.request-note { background: var(--primary-soft); border-radius: 8px; padding: .5rem .7rem; font-size: .92rem; }
+
 /* Base de conhecimento */
 .tag.ok { background: var(--primary-soft); color: var(--primary); }
 .kb-pack { display: flex; justify-content: space-between; align-items: flex-start; gap: .8rem; padding: .6rem 0; border-bottom: 1px dashed var(--border); }

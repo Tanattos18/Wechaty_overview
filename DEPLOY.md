@@ -57,6 +57,14 @@ PUPPETEER_SKIP_DOWNLOAD=true npm ci
 
 ## 3. Configurar o `.env`
 
+Primeiro confira quais portas já estão em uso (outros sistemas na mesma VPS):
+
+```bash
+ss -tlnp | grep -E ':(3000|3100) '
+```
+
+Se nada aparecer para `3100`, use `PORT=3100` (recomendado quando a VPS já tem outros sistemas).
+
 ```bash
 cp .env.example .env
 nano .env
@@ -65,6 +73,7 @@ nano .env
 Ajuste:
 
 ```ini
+PORT=3100
 ADMIN_PASSWORD=uma-senha-forte-e-diferente-da-local
 SESSION_SECRET=   # gere com o comando abaixo e cole aqui
 BROWSER_PATH=/usr/bin/google-chrome-stable
@@ -107,15 +116,54 @@ Como usuário `chatbot`, dentro de `~/chatbot`:
 ```bash
 pm2 start npm --name chatbot -- start
 pm2 save
-pm2 logs chatbot --lines 20     # deve aparecer "Painel em http://localhost:3000"
+pm2 logs chatbot --lines 20     # deve aparecer "Painel em http://localhost:3100"
 ```
 
 Para iniciar sozinho quando a VPS reiniciar, rode `pm2 startup` e **copie e execute como root**
 o comando que ele mostrar.
 
-## 6. Nginx + HTTPS
+## 6. Domínio com HTTPS
 
-Como root, crie `/etc/nginx/sites-available/chatbot` (troque o domínio):
+### 6A. VPS que já usa Caddy (outros sistemas já publicados, como na VPS atual)
+
+Se ao instalar o Nginx apareceu *"port 80 is already in use"*, a VPS já tem um servidor web — normalmente
+o **Caddy** (veja com `systemctl status caddy`). Use ele; o Caddy já gera o HTTPS sozinho.
+
+Como root, desative o Nginx para ele não disputar a porta 80 depois de reiniciar:
+
+```bash
+systemctl disable --now nginx
+```
+
+Faça uma cópia do Caddyfile antes de mexer e abra para editar:
+
+```bash
+cp /etc/caddy/Caddyfile /etc/caddy/Caddyfile.bak-$(date +%F)
+nano /etc/caddy/Caddyfile
+```
+
+**Acrescente no final** (sem alterar os blocos que já existem; troque o domínio):
+
+```caddy
+painel.seudominio.com.br {
+    reverse_proxy 127.0.0.1:3100
+    request_body {
+        max_size 10MB
+    }
+}
+```
+
+Valide e recarregue (o reload não derruba os outros sites):
+
+```bash
+caddy validate --config /etc/caddy/Caddyfile && systemctl reload caddy
+```
+
+Se der erro no `validate`, volte a cópia (`cp /etc/caddy/Caddyfile.bak-* /etc/caddy/Caddyfile`) e me mande a mensagem.
+
+### 6B. VPS limpa: Nginx + Certbot
+
+Como root, crie `/etc/nginx/sites-available/chatbot` (troque o domínio e a porta):
 
 ```nginx
 server {
@@ -125,7 +173,7 @@ server {
     client_max_body_size 10m;   # importação de pacotes de conhecimento
 
     location / {
-        proxy_pass http://127.0.0.1:3000;
+        proxy_pass http://127.0.0.1:3100;
         proxy_http_version 1.1;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
@@ -148,7 +196,11 @@ certbot --nginx -d painel.seudominio.com.br
 
 ## 7. Firewall
 
-Deixe abertos só SSH e web. A porta 3000 fica fechada (o acesso passa pelo Nginx):
+⚠️ **Se a VPS já tem outros sistemas rodando**, antes de ligar o firewall veja quais portas eles usam
+(`ss -tlnp`) e libere também as que precisam ser acessadas de fora. Na dúvida, pule este passo e me mande
+a saída do `ss -tlnp`.
+
+Deixe abertos só SSH e web. A porta do painel (3100) fica fechada — o acesso passa pelo Caddy/Nginx:
 
 ```bash
 ufw allow OpenSSH
@@ -188,6 +240,7 @@ Vale também ativar os **snapshots/backups da VPS** no hPanel.
 |---|---|
 | QR Code não aparece | `pm2 logs chatbot`; confirme `BROWSER_PATH=/usr/bin/google-chrome-stable` e o Chrome instalado |
 | "Faça login" a cada clique | Com `COOKIE_SECURE=true` o painel precisa ser aberto por **https://** |
-| Painel não abre pelo domínio | `nginx -t`, DNS apontando para o IP, firewall com 80/443 liberadas |
+| Painel não abre pelo domínio | `caddy validate --config /etc/caddy/Caddyfile` (ou `nginx -t`), DNS apontando para o IP, firewall com 80/443 liberadas |
+| "port 80 is already in use" ao instalar o Nginx | A VPS já tem Caddy: siga o passo **6A** e desative o Nginx |
 | VPS lenta / sem memória | `free -h`; muitos WhatsApps conectados → plano com mais RAM |
 | Erro de `node:sqlite` | Node antigo: `node -v` precisa ser 22.13 ou maior |

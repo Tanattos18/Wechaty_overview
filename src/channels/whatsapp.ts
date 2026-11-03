@@ -57,7 +57,9 @@ export class BotManager {
     const existing = this.bots.get(tenantId)
     if (existing?.status === 'error') await this.stop(tenantId) // permite tentar de novo
     else if (existing) return
-    if (!this.store.getTenant(tenantId)) throw new Error(`Cliente não encontrado: ${tenantId}`)
+    const tenant = this.store.getTenant(tenantId)
+    if (!tenant) throw new Error(`Cliente não encontrado: ${tenantId}`)
+    if (tenant.suspended) throw new Error(`Cliente suspenso: ${tenantId}`)
 
     const client = new Client({
       // A sessão fica salva em data/sessions/session-<id>: não pede QR a cada reinício.

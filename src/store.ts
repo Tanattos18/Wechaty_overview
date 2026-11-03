@@ -1,7 +1,7 @@
 import fs from 'node:fs'
 import fsp from 'node:fs/promises'
 import path from 'node:path'
-import type { Channel, ChatMessage, Conversation, Order, TenantConfig } from './types.js'
+import type { AdjustmentRequest, Channel, ChatMessage, Conversation, Order, TenantConfig } from './types.js'
 
 const MAX_MESSAGES_PER_CHAT = 300
 const TENANT_ID_RE = /^[a-z0-9][a-z0-9-]{1,40}$/
@@ -13,6 +13,7 @@ export function isValidTenantId (id: string): boolean {
 interface Runtime {
   conversations: Map<string, Conversation>
   orders: Order[]
+  requests: AdjustmentRequest[]
 }
 
 /**
@@ -65,7 +66,8 @@ export class Store {
       const dir = path.join(this.runtimeDir, tenantId)
       const conversations = readJson<Conversation[]>(path.join(dir, 'conversations.json'), [])
       const orders = readJson<Order[]>(path.join(dir, 'orders.json'), [])
-      rt = { conversations: new Map(conversations.map(c => [c.chatId, c])), orders }
+      const requests = readJson<AdjustmentRequest[]>(path.join(dir, 'requests.json'), [])
+      rt = { conversations: new Map(conversations.map(c => [c.chatId, c])), orders, requests }
       this.runtimes.set(tenantId, rt)
     }
     return rt
@@ -139,6 +141,33 @@ export class Store {
   saveOrders (tenantId: string): void {
     const rt = this.runtime(tenantId)
     this.schedule(path.join(this.runtimeDir, tenantId, 'orders.json'), () => JSON.stringify(rt.orders, null, 2))
+  }
+
+  // ---------- pedidos de ajuste ----------
+
+  listRequests (tenantId: string): AdjustmentRequest[] {
+    return [...this.runtime(tenantId).requests].sort((a, b) => b.number - a.number)
+  }
+
+  addRequest (tenantId: string, text: string): AdjustmentRequest {
+    const rt = this.runtime(tenantId)
+    const number = rt.requests.reduce((max, r) => Math.max(max, r.number), 0) + 1
+    const now = new Date().toISOString()
+    const request: AdjustmentRequest = {
+      id: `${tenantId}-a${number}`, number, text, status: 'aberto', note: '', createdAt: now, updatedAt: now,
+    }
+    rt.requests.push(request)
+    this.saveRequests(tenantId)
+    return request
+  }
+
+  findRequest (tenantId: string, id: string): AdjustmentRequest | undefined {
+    return this.runtime(tenantId).requests.find(r => r.id === id)
+  }
+
+  saveRequests (tenantId: string): void {
+    const rt = this.runtime(tenantId)
+    this.schedule(path.join(this.runtimeDir, tenantId, 'requests.json'), () => JSON.stringify(rt.requests, null, 2))
   }
 
   // ---------- gravação ----------

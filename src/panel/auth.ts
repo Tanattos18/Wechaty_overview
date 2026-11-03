@@ -4,6 +4,8 @@ import type { NextFunction, Request, Response } from 'express'
 export interface Session {
   role: 'admin' | 'tenant'
   tenantId?: string
+  /** Super Admin vendo o painel como o cliente ("Ver como cliente"). */
+  impersonating?: boolean
   exp: number
 }
 
@@ -32,7 +34,11 @@ export function safeEqual (a: string, b: string): boolean {
 }
 
 export class Auth {
-  constructor (private readonly secret: string) {}
+  constructor (
+    private readonly secret: string,
+    /** Cliente suspenso (mensalidade atrasada) perde o acesso ao painel. */
+    private readonly isSuspended: (tenantId: string) => boolean = () => false,
+  ) {}
 
   private sign (payload: string): string {
     return crypto.createHmac('sha256', this.secret).update(payload).digest('base64url')
@@ -45,7 +51,6 @@ export class Auth {
       httpOnly: true,
       sameSite: 'lax',
       secure: process.env.COOKIE_SECURE === 'true', // com HTTPS na VPS
-
       maxAge: SESSION_HOURS * 3600_000,
     })
   }
@@ -71,6 +76,10 @@ export class Auth {
   required = (req: Request, res: Response, next: NextFunction): void => {
     const session = this.read(req)
     if (!session) { res.status(401).json({ error: 'Faça login.' }); return }
+    if (session.role === 'tenant' && !session.impersonating && this.isSuspended(session.tenantId ?? '')) {
+      res.status(403).json({ error: 'Acesso suspenso. Entre em contato com o suporte.', suspended: true })
+      return
+    }
     const tenantId = req.params.tenantId
     if (tenantId && session.role !== 'admin' && session.tenantId !== tenantId) {
       res.status(403).json({ error: 'Sem acesso a este cliente.' })

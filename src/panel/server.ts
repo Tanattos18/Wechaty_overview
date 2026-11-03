@@ -8,7 +8,10 @@ import type { Engine } from '../engine/engine.js'
 import { BUILTIN_VARIABLES, tenantKnowledge, type KnowledgeBase } from '../knowledge/kb.js'
 import { isValidTenantId, type Store } from '../store.js'
 import { newTenant, sanitizeTenant } from '../tenant-template.js'
-import { ORDER_STATUSES, type Conversation, type OrderStatus, type TenantConfig } from '../types.js'
+import {
+  ADJUSTMENT_STATUSES, DEFAULT_PLAN, ORDER_STATUSES,
+  type ClientPermissions, type Conversation, type OrderStatus, type TenantConfig,
+} from '../types.js'
 import { Auth, hashPassword, safeEqual, verifyPassword, type Session } from './auth.js'
 
 export interface PanelDeps {
@@ -45,7 +48,7 @@ function conversationSummary (c: Conversation) {
 
 export function createPanel (deps: PanelDeps) {
   const { store, engine, bots } = deps
-  const auth = new Auth(deps.sessionSecret)
+  const auth = new Auth(deps.sessionSecret, id => Boolean(store.getTenant(id)?.suspended))
   const app = express()
   app.disable('x-powered-by')
   // Atrás do Nginx (VPS): usa o IP real do visitante no limite de tentativas de login
@@ -87,6 +90,10 @@ export function createPanel (deps: PanelDeps) {
       return
     }
     failures.delete(ip)
+    if (session.role === 'tenant' && store.getTenant(tenantId)?.suspended) {
+      res.status(403).json({ error: 'Acesso suspenso. Entre em contato com o suporte.' })
+      return
+    }
     auth.issue(res, session)
     res.json({ ok: true })
   })
@@ -94,17 +101,84 @@ export function createPanel (deps: PanelDeps) {
   app.post('/api/logout', (_req, res) => { auth.clear(res); res.json({ ok: true }) })
 
   app.get('/api/me', auth.required, (_req, res) => {
-    res.json(res.locals.session)
+    const session = res.locals.session as Session
+    if (session.role === 'admin') { res.json(session); return }
+    const tenant = store.getTenant(session.tenantId ?? '')
+    res.json({
+      ...session,
+      tenantName: tenant?.name,
+      clientCan: permissions(tenant),
+      plan: tenant?.plan ?? DEFAULT_PLAN,
+      usage: tenant ? adjustmentsThisMonth(tenant.id) : 0,
+    })
   })
 
   // ---------- clientes ----------
+
+  const permissions = (t?: TenantConfig): ClientPermissions => ({ info: false, products: false, ...t?.clientCan })
+
+  /** Ajustes pedidos no mês corrente (os recusados não contam no pacote). */
+  const adjustmentsThisMonth = (tenantId: string) => {
+    const month = new Date().toISOString().slice(0, 7)
+    return store.listRequests(tenantId).filter(r => r.createdAt.startsWith(month) && r.status !== 'recusado').length
+  }
 
   app.get('/api/tenants', auth.required, (_req, res) => {
     const session = res.locals.session as Session
     const list = store.listTenants()
       .filter(t => session.role === 'admin' || t.id === session.tenantId)
-      .map(t => ({ id: t.id, name: t.name, active: t.active, bot: bots.info(t.id).status }))
+      .map(t => ({
+        id: t.id,
+        name: t.name,
+        active: t.active,
+        bot: bots.info(t.id).status,
+        ...(session.role === 'admin' ? {
+          suspended: Boolean(t.suspended),
+          clientCan: permissions(t),
+          plan: t.plan ?? DEFAULT_PLAN,
+          usage: adjustmentsThisMonth(t.id),
+          openRequests: store.listRequests(t.id).filter(r => r.status === 'aberto' || r.status === 'andamento').length,
+          hasPassword: Boolean(t.panelPasswordHash),
+          conversations: store.listConversations(t.id).length,
+        } : {}),
+      }))
     res.json(list)
+  })
+
+  /** Super Admin: suspender/reativar, permissões do cliente e plano. */
+  app.patch('/api/tenants/:tenantId/admin', auth.required, auth.adminOnly, async (req, res) => {
+    const tenant = tenantOr404(req, res)
+    if (!tenant) return
+    const b = req.body ?? {}
+    const updated: TenantConfig = { ...tenant }
+    if (typeof b.suspended === 'boolean') updated.suspended = b.suspended
+    if (b.clientCan && typeof b.clientCan === 'object') {
+      updated.clientCan = { info: b.clientCan.info === true, products: b.clientCan.products === true }
+    }
+    if (b.plan && typeof b.plan === 'object') {
+      updated.plan = {
+        name: String(b.plan.name ?? DEFAULT_PLAN.name).trim().slice(0, 40) || DEFAULT_PLAN.name,
+        adjustmentsPerMonth: Math.max(0, Math.min(999, Math.round(Number(b.plan.adjustmentsPerMonth) || 0))),
+      }
+    }
+    store.saveTenant(updated)
+    if (updated.suspended && !tenant.suspended) await bots.stop(tenant.id) // suspenso: desliga o WhatsApp
+    res.json(publicTenant(updated))
+  })
+
+  /** Super Admin entra no painel como o cliente, para dar suporte. */
+  app.post('/api/tenants/:tenantId/impersonate', auth.required, auth.adminOnly, (req, res) => {
+    const tenant = tenantOr404(req, res)
+    if (!tenant) return
+    auth.issue(res, { role: 'tenant', tenantId: tenant.id, impersonating: true })
+    res.json({ ok: true })
+  })
+
+  app.post('/api/impersonate/stop', auth.required, (_req, res) => {
+    const session = res.locals.session as Session
+    if (!session.impersonating) { res.status(400).json({ error: 'Você não está vendo como cliente.' }); return }
+    auth.issue(res, { role: 'admin' })
+    res.json({ ok: true })
   })
 
   app.post('/api/tenants', auth.required, auth.adminOnly, (req, res) => {
@@ -130,7 +204,19 @@ export function createPanel (deps: PanelDeps) {
   app.put('/api/tenants/:tenantId/config', auth.required, (req, res) => {
     const tenant = tenantOr404(req, res)
     if (!tenant) return
-    const updated = sanitizeTenant(req.body, tenant)
+    const session = res.locals.session as Session
+    const sanitized = sanitizeTenant(req.body, tenant)
+    let updated = sanitized
+    if (session.role === 'tenant') {
+      // O cliente só altera o que o Super Admin liberou; o resto continua como está
+      const can = permissions(tenant)
+      updated = { ...tenant }
+      if (can.info) {
+        updated.business = sanitized.business
+        updated.knowledge = { ...(tenant.knowledge ?? sanitized.knowledge!), variables: sanitized.knowledge!.variables }
+      }
+      if (can.products) updated.products = sanitized.products
+    }
     const newPassword = String(req.body?.newPassword ?? '')
     if (newPassword) {
       if (newPassword.length < 8) { res.status(400).json({ error: 'A senha precisa ter pelo menos 8 caracteres.' }); return }
@@ -151,6 +237,7 @@ export function createPanel (deps: PanelDeps) {
   app.post('/api/tenants/:tenantId/bot/start', auth.required, (req, res) => {
     const tenant = tenantOr404(req, res)
     if (!tenant) return
+    if (tenant.suspended) { res.status(403).json({ error: 'Cliente suspenso: reative para conectar o WhatsApp.' }); return }
     bots.start(tenant.id).catch(err => console.error(`[bot] ${tenant.id} não iniciou:`, err?.message ?? err))
     res.json({ ok: true })
   })
@@ -274,7 +361,7 @@ export function createPanel (deps: PanelDeps) {
   })
 
   /** Baixa o pacote como arquivo JSON, para importar em outra instalação. */
-  app.get('/api/knowledge/packs/:packId/export', auth.required, (req, res) => {
+  app.get('/api/knowledge/packs/:packId/export', auth.required, auth.adminOnly, (req, res) => {
     const pack = knowledge.getPack(String(req.params.packId))
     if (!pack) { res.status(404).json({ error: 'Pacote não encontrado.' }); return }
     res.setHeader('Content-Disposition', `attachment; filename="conhecimento-${pack.id}-v${pack.version}.json"`)
@@ -315,6 +402,46 @@ export function createPanel (deps: PanelDeps) {
     if (!tenant) return
     knowledge.deleteUnanswered(tenant.id, Number(req.params.id))
     res.json({ ok: true })
+  })
+
+  // ---------- pedidos de ajuste ----------
+
+  app.get('/api/tenants/:tenantId/requests', auth.required, (req, res) => {
+    const tenant = tenantOr404(req, res)
+    if (!tenant) return
+    res.json({ requests: store.listRequests(tenant.id), plan: tenant.plan ?? DEFAULT_PLAN, usage: adjustmentsThisMonth(tenant.id) })
+  })
+
+  app.post('/api/tenants/:tenantId/requests', auth.required, (req, res) => {
+    const tenant = tenantOr404(req, res)
+    if (!tenant) return
+    const text = String(req.body?.text ?? '').trim().slice(0, 2000)
+    if (text.length < 5) { res.status(400).json({ error: 'Descreva o ajuste que você precisa.' }); return }
+    const request = store.addRequest(tenant.id, text)
+    console.log(`[ajuste] ${tenant.id} #${request.number}: ${text.slice(0, 80)}`)
+    res.status(201).json(request)
+  })
+
+  /** Todos os pedidos de todos os clientes, para o Super Admin. */
+  app.get('/api/requests', auth.required, auth.adminOnly, (_req, res) => {
+    const all = store.listTenants().flatMap(t => store.listRequests(t.id).map(r => ({ ...r, tenantId: t.id, tenantName: t.name })))
+    all.sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+    res.json(all)
+  })
+
+  app.patch('/api/tenants/:tenantId/requests/:id', auth.required, auth.adminOnly, (req, res) => {
+    const tenant = tenantOr404(req, res)
+    if (!tenant) return
+    const request = store.findRequest(tenant.id, String(req.params.id))
+    if (!request) { res.status(404).json({ error: 'Pedido não encontrado.' }); return }
+    if (req.body?.status !== undefined) {
+      if (!ADJUSTMENT_STATUSES.includes(req.body.status)) { res.status(400).json({ error: 'Status inválido.' }); return }
+      request.status = req.body.status
+    }
+    if (typeof req.body?.note === 'string') request.note = req.body.note.slice(0, 1000)
+    request.updatedAt = new Date().toISOString()
+    store.saveRequests(tenant.id)
+    res.json(request)
   })
 
   app.use('/api', (_req, res) => { res.status(404).json({ error: 'Rota não encontrada.' }) })

@@ -24,17 +24,23 @@
     <aside class="sidebar">
       <div class="brand">🤖 ChatBot</div>
       <nav id="nav">
+        <button data-tab="clients" data-admin>👥 Clientes</button>
         <button data-tab="connection">📱 Conexão</button>
         <button data-tab="chats">💬 Conversas <span id="badge-chats" class="badge hidden"></span></button>
         <button data-tab="orders">🧾 Pedidos <span id="badge-orders" class="badge hidden"></span></button>
         <button data-tab="knowledge">📚 Conhecimento <span id="badge-knowledge" class="badge hidden"></span></button>
         <button data-tab="config">⚙️ Configuração</button>
         <button data-tab="simulator">🧪 Simulador</button>
+        <button data-tab="requests">📝 Ajustes <span id="badge-requests" class="badge hidden"></span></button>
       </nav>
       <button id="logout" class="btn ghost small">Sair</button>
     </aside>
 
     <main class="main">
+      <div id="impersonation" class="impersonation hidden">
+        <span>👁️ Você está vendo o painel como <b id="impersonation-name"></b> (visão do cliente).</span>
+        <button id="impersonation-stop" class="btn small">Voltar ao Super Admin</button>
+      </div>
       <header class="topbar">
         <h2 id="title"></h2>
         <div class="tenant-picker">

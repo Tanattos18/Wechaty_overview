@@ -77,6 +77,7 @@ export class Engine {
     const { store } = this.deps
     const tenant = store.getTenant(msg.tenantId)
     if (!tenant) throw new Error(`Cliente não encontrado: ${msg.tenantId}`)
+    if (tenant.suspended) return [] // cliente suspenso: o bot não responde
 
     const conv = store.getConversation(tenant.id, msg.chatId, msg.name, msg.channel)
     store.appendMessage(conv, 'customer', msg.text, this.now())

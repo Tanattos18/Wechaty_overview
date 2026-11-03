@@ -4,6 +4,8 @@ const $ = (sel, root = document) => root.querySelector(sel)
 const view = $('#view')
 
 const TABS = {
+  clients: 'Clientes',
+  requests: 'Pedidos de ajuste',
   connection: 'Conexão com WhatsApp',
   chats: 'Conversas',
   orders: 'Pedidos',
@@ -36,6 +38,11 @@ async function api (method, url, body) {
   })
   const data = await res.json().catch(() => ({}))
   if (res.status === 401 && url !== '/api/login') { showLogin(); throw new Error('Sessão expirada.') }
+  if (res.status === 403 && data.suspended) {
+    showLogin()
+    $('#login-error').textContent = data.error
+    throw new Error(data.error)
+  }
   if (!res.ok) throw new Error(data.error || `Erro ${res.status}`)
   return data
 }
@@ -108,18 +115,47 @@ async function loadTenants () {
   select.classList.toggle('hidden', state.me.role !== 'admin')
 }
 
+const isAdmin = () => state.me?.role === 'admin'
+const can = perm => isAdmin() || Boolean(state.me?.clientCan?.[perm])
+
 async function boot () {
   state.me = await api('GET', '/api/me')
   $('#login').classList.add('hidden')
   $('#app').classList.remove('hidden')
-  $('#new-tenant').classList.toggle('hidden', state.me.role !== 'admin')
+  $('#new-tenant').classList.toggle('hidden', !isAdmin())
+
+  // Abas por perfil: o cliente vê o dia a dia; a configuração só se o Super Admin liberou
+  const visible = {
+    clients: isAdmin(),
+    config: isAdmin() || can('info') || can('products'),
+  }
+  for (const b of document.querySelectorAll('#nav button[data-tab]')) {
+    b.classList.toggle('hidden', visible[b.dataset.tab] === false)
+  }
+  $('#impersonation').classList.toggle('hidden', !state.me.impersonating)
+  $('#impersonation-name').textContent = state.me.tenantName ?? ''
+
   await loadTenants()
+  if (!boot.started || (state.tab === 'clients' && !isAdmin()) || (state.tab === 'config' && !visible.config)) {
+    state.tab = isAdmin() ? 'clients' : 'chats'
+  }
+  boot.started = true
   openTab(state.tab)
   updateBadges().catch(() => {})
   boot.badges ??= setInterval(() => updateBadges().catch(() => {}), 8000)
 }
 
+$('#impersonation-stop').addEventListener('click', async () => {
+  await api('POST', '/api/impersonate/stop')
+  state.tab = 'clients'
+  await boot()
+})
+
 async function updateBadges () {
+  if (isAdmin()) {
+    const all = await api('GET', '/api/requests')
+    setBadge('#badge-requests', all.filter(r => r.status === 'aberto').length)
+  }
   if (!state.tenantId) return
   const [convs, orders, unanswered] = await Promise.all([
     api('GET', tenantUrl('/conversations')), api('GET', tenantUrl('/orders')), api('GET', tenantUrl('/knowledge/unanswered')),
@@ -141,11 +177,16 @@ function openTab (tab) {
   state.tab = tab
   $('#title').textContent = TABS[tab]
   for (const b of document.querySelectorAll('#nav button')) b.classList.toggle('active', b.dataset.tab === tab)
-  if (!state.tenantId) {
+  // Visões gerais do Super Admin não dependem do cliente selecionado
+  $('.tenant-picker').classList.toggle('hidden', (tab === 'clients' || tab === 'requests') && isAdmin())
+  if (!state.tenantId && tab !== 'clients' && !(tab === 'requests' && isAdmin())) {
     view.innerHTML = '<div class="card empty">Nenhum cliente cadastrado. Use “+ Novo cliente”.</div>'
     return
   }
-  const render = { connection: renderConnection, chats: renderChats, orders: renderOrders, knowledge: renderKnowledge, config: renderConfig, simulator: renderSimulator }[tab]
+  const render = {
+    clients: renderClients, requests: renderRequests, connection: renderConnection, chats: renderChats, orders: renderOrders,
+    knowledge: renderKnowledge, config: isAdmin() ? renderConfig : renderClientConfig, simulator: renderSimulator,
+  }[tab]
   render().catch(err => { view.innerHTML = `<div class="card error">${esc(err.message)}</div>` })
 }
 
@@ -561,6 +602,7 @@ async function renderKnowledge () {
   const active = new Set(k.packs)
   const details = await Promise.all(packs.filter(p => active.has(p.id)).map(p => api('GET', `/api/knowledge/packs/${p.id}`)))
   const isAdmin = state.me.role === 'admin'
+  const canInfo = can('info')
   const builtin = { empresa: cfg.name, horario: cfg.business.hours, endereco: cfg.business.address, telefone: cfg.business.phone }
   const topicTitles = Object.fromEntries(details.flatMap(p => p.topics.map(t => [`${p.id}/${t.key}`, `${p.name} › ${t.title}`])))
   const topicVars = Object.fromEntries(details.flatMap(p => p.topics.map(t => [`${p.id}/${t.key}`, placeholders(t.answer)])))
@@ -623,7 +665,7 @@ async function renderKnowledge () {
         <div id="kb-test-result" class="muted">Digite como um cliente escreveria e veja qual resposta o bot daria.</div>
       </section>
 
-      <section class="card stack">
+      ${isAdmin ? `<section class="card stack">
         <h3>Pacotes de perguntas</h3>
         <p class="muted">Ative os pacotes do ramo do negócio. O pacote comum vale para todos.</p>
         ${packs.map(p => `
@@ -636,14 +678,14 @@ async function renderKnowledge () {
         ${isAdmin ? `<div class="row"><label class="btn small" style="display:inline-flex">⬆ Importar pacote (.json)
           <input type="file" id="kb-import" accept=".json,application/json" hidden></label>
           <span class="muted">Um pacote com o mesmo ID substitui o atual.</span></div>` : ''}
-      </section>
+      </section>` : ''}
 
-      <section class="card stack">
+      ${canInfo ? `<section class="card stack">
         <h3>Informações do negócio</h3>
         <p class="muted">As respostas usam estas informações. Assunto sem informação preenchida não é respondido; o bot oferece um atendente.
           Nome, horário, endereço e telefone vêm da aba <b>Configuração</b>.</p>
         ${varsHtml || '<p class="muted">Ative um pacote para ver os campos.</p>'}
-      </section>
+      </section>` : ''}
 
       <section class="card stack">
         <h3>Perguntas sem resposta <span class="badge ${unanswered.length ? '' : 'hidden'}">${unanswered.length}</span></h3>
@@ -659,13 +701,14 @@ async function renderKnowledge () {
           }).join('')}</tbody></table></div>` : '<p class="muted">Nenhuma por enquanto. 🎉</p>'}
       </section>
 
-      <section class="card stack">
+      ${isAdmin ? `<section class="card stack">
         <h3>Respostas e formas de perguntar</h3>
         <p class="muted">Personalize o texto de qualquer resposta ou desative assuntos que não se aplicam ao negócio.</p>
         ${topicsHtml || '<p class="muted">Nenhum pacote ativo.</p>'}
-      </section>
+      </section>` : ''}
 
-      <div class="save-bar"><button class="btn primary" id="kb-save">Salvar base de conhecimento</button></div>
+      ${!isAdmin ? '<p class="muted">Precisa mudar alguma resposta do bot? Peça na aba <b>Ajustes</b>. 😉</p>' : ''}
+      ${canInfo ? '<div class="save-bar"><button class="btn primary" id="kb-save">Salvar</button></div>' : ''}
     </div>`
 
   $('#kb-test-form').onsubmit = async e => {
@@ -697,7 +740,7 @@ async function renderKnowledge () {
     } catch (err) { toast(err instanceof SyntaxError ? 'Arquivo não é um JSON válido.' : err.message) }
   })
 
-  $('#kb-save').onclick = async () => {
+  if ($('#kb-save')) $('#kb-save').onclick = async () => {
     const variables = { ...k.variables }
     for (const t of view.querySelectorAll('textarea[name=var]')) variables[t.dataset.key] = t.value.trim()
     const overrides = { ...k.overrides }
@@ -712,6 +755,236 @@ async function renderKnowledge () {
       await api('PUT', tenantUrl('/config'), { ...cfg, knowledge: { packs: packsOn, variables, overrides } })
       toast('Base de conhecimento salva ✔')
       renderKnowledge()
+    } catch (err) { toast(err.message) }
+  }
+}
+
+// ---------- Clientes (Super Admin) ----------
+
+async function renderClients () {
+  const tenants = await api('GET', '/api/tenants')
+  const statusPill = t => t.suspended
+    ? '<span class="tag alert">Suspenso</span>'
+    : `<span class="status-pill ${t.bot}">${STATUS_LABEL[t.bot] ?? t.bot}</span>`
+  view.innerHTML = tenants.length ? `
+    <div class="card table-wrap">
+      <table class="clients">
+        <thead><tr><th>Cliente</th><th>WhatsApp</th><th>Plano e ajustes do mês</th><th>O cliente pode editar</th><th>Ações</th></tr></thead>
+        <tbody>${tenants.map(t => `
+          <tr data-id="${esc(t.id)}" class="${t.suspended ? 'suspended' : ''}">
+            <td><strong>${esc(t.name)}</strong><br><span class="muted">ID: ${esc(t.id)}${t.hasPassword ? '' : ' · <span class="tag human">sem senha</span>'}</span>
+              ${t.openRequests ? `<br><span class="tag alert">${t.openRequests} ajuste(s) pendente(s)</span>` : ''}</td>
+            <td>${statusPill(t)}<br><span class="muted">${t.conversations} conversa(s)</span></td>
+            <td>
+              <div class="row" style="gap:.4rem">
+                <input name="planName" value="${esc(t.plan.name)}" aria-label="Nome do plano" style="width:110px">
+                <input name="planQuota" type="number" min="0" max="999" value="${t.plan.adjustmentsPerMonth}" aria-label="Ajustes por mês" style="width:70px">
+                <span class="muted">/mês</span>
+              </div>
+              <div class="${t.usage > t.plan.adjustmentsPerMonth ? 'error' : 'muted'}" style="font-size:.85rem">${t.usage} de ${t.plan.adjustmentsPerMonth} usados este mês</div>
+            </td>
+            <td>
+              <label class="check"><input type="checkbox" name="info" ${t.clientCan.info ? 'checked' : ''}> Informações (horário, Pix, taxa...)</label>
+              <label class="check"><input type="checkbox" name="products" ${t.clientCan.products ? 'checked' : ''}> Produtos e preços</label>
+            </td>
+            <td class="actions">
+              <button class="btn small primary" data-act="save">Salvar</button>
+              <button class="btn small" data-act="view" ${t.suspended ? 'disabled' : ''}>👁️ Ver como cliente</button>
+              <button class="btn small" data-act="open">Abrir</button>
+              <button class="btn small ${t.suspended ? '' : 'danger'}" data-act="suspend">${t.suspended ? '✅ Reativar' : '⛔ Suspender'}</button>
+            </td>
+          </tr>`).join('')}
+        </tbody>
+      </table>
+    </div>
+    <p class="muted" style="margin-top:.8rem">⛔ <b>Suspender</b> desliga o WhatsApp do cliente e bloqueia o painel dele até você reativar (use para mensalidade atrasada).
+      👁️ <b>Ver como cliente</b> abre o painel exatamente como o cliente vê.</p>`
+    : '<div class="card empty">Nenhum cliente ainda. Use “+ Novo cliente”.</div>'
+
+  view.querySelector('table')?.addEventListener('click', async e => {
+    const btn = e.target.closest('button[data-act]')
+    if (!btn) return
+    const row = btn.closest('tr')
+    const id = row.dataset.id
+    const t = tenants.find(x => x.id === id)
+    try {
+      if (btn.dataset.act === 'save') {
+        await api('PATCH', `/api/tenants/${encodeURIComponent(id)}/admin`, {
+          plan: { name: $('[name=planName]', row).value, adjustmentsPerMonth: $('[name=planQuota]', row).value },
+          clientCan: { info: $('[name=info]', row).checked, products: $('[name=products]', row).checked },
+        })
+        toast(`${t.name}: salvo ✔`)
+      } else if (btn.dataset.act === 'suspend') {
+        const suspend = !t.suspended
+        if (suspend && !confirm(`Suspender ${t.name}? O WhatsApp será desligado e o cliente perde o acesso ao painel até ser reativado.`)) return
+        await api('PATCH', `/api/tenants/${encodeURIComponent(id)}/admin`, { suspended: suspend })
+        toast(suspend ? `${t.name} suspenso.` : `${t.name} reativado. Conecte o WhatsApp de novo na aba Conexão.`)
+      } else if (btn.dataset.act === 'view') {
+        await api('POST', `/api/tenants/${encodeURIComponent(id)}/impersonate`)
+        state.tenantId = id
+        state.tab = 'chats'
+        await boot()
+        return
+      } else if (btn.dataset.act === 'open') {
+        state.tenantId = id
+        $('#tenant-select').value = id
+        openTab('connection')
+        return
+      }
+      await loadTenants()
+      renderClients()
+    } catch (err) { toast(err.message) }
+  })
+}
+
+// ---------- Pedidos de ajuste ----------
+
+const REQUEST_STATUS = { aberto: 'Aberto', andamento: 'Em andamento', feito: 'Feito', recusado: 'Recusado' }
+const requestTag = s => `<span class="tag ${s === 'aberto' ? 'alert' : s === 'andamento' ? 'human' : s === 'feito' ? 'ok' : ''}">${REQUEST_STATUS[s]}</span>`
+
+async function renderRequests () {
+  return isAdmin() ? renderAdminRequests() : renderClientRequests()
+}
+
+async function renderAdminRequests () {
+  const all = await api('GET', '/api/requests')
+  const filter = renderAdminRequests.filter ?? 'pendentes'
+  const shown = filter === 'pendentes' ? all.filter(r => r.status === 'aberto' || r.status === 'andamento') : all
+  view.innerHTML = `
+    <div class="row" style="margin-bottom:1rem">
+      <button class="btn small ${filter === 'pendentes' ? 'primary' : ''}" data-filter="pendentes">Pendentes (${all.filter(r => r.status === 'aberto' || r.status === 'andamento').length})</button>
+      <button class="btn small ${filter === 'todos' ? 'primary' : ''}" data-filter="todos">Todos (${all.length})</button>
+    </div>
+    ${shown.length ? `<div class="stack">${shown.map(r => `
+      <div class="card stack request" data-tenant="${esc(r.tenantId)}" data-id="${esc(r.id)}">
+        <div class="row" style="justify-content:space-between">
+          <div><strong>${esc(r.tenantName)}</strong> <span class="muted">· #${r.number} · ${time(r.createdAt)}</span></div>
+          ${requestTag(r.status)}
+        </div>
+        <div class="request-text">${esc(r.text)}</div>
+        <div class="row">
+          <select name="status" aria-label="Status">${Object.entries(REQUEST_STATUS).map(([v, l]) => `<option value="${v}" ${v === r.status ? 'selected' : ''}>${l}</option>`).join('')}</select>
+          <input name="note" value="${esc(r.note)}" placeholder="Resposta para o cliente (opcional)" style="flex:1;min-width:200px">
+          <button class="btn small primary" data-act="save">Salvar</button>
+          <button class="btn small" data-act="view">👁️ Ver como cliente</button>
+        </div>
+      </div>`).join('')}</div>` : '<div class="card empty">Nenhum pedido de ajuste pendente. 🎉</div>'}`
+
+  for (const b of view.querySelectorAll('[data-filter]')) {
+    b.onclick = () => { renderAdminRequests.filter = b.dataset.filter; renderAdminRequests() }
+  }
+  for (const card of view.querySelectorAll('.request')) {
+    const tenant = card.dataset.tenant
+    $('[data-act=save]', card).onclick = async () => {
+      try {
+        await api('PATCH', `/api/tenants/${encodeURIComponent(tenant)}/requests/${encodeURIComponent(card.dataset.id)}`, {
+          status: $('[name=status]', card).value, note: $('[name=note]', card).value,
+        })
+        toast('Pedido atualizado ✔')
+        renderAdminRequests()
+        updateBadges().catch(() => {})
+      } catch (err) { toast(err.message) }
+    }
+    $('[data-act=view]', card).onclick = async () => {
+      await api('POST', `/api/tenants/${encodeURIComponent(tenant)}/impersonate`)
+      state.tenantId = tenant
+      state.tab = 'chats'
+      await boot()
+    }
+  }
+}
+
+async function renderClientRequests () {
+  const { requests, plan, usage } = await api('GET', tenantUrl('/requests'))
+  const over = usage >= plan.adjustmentsPerMonth
+  view.innerHTML = `
+    <div class="config">
+      <section class="card stack">
+        <h3>Pedir um ajuste</h3>
+        <p class="muted">Descreva o que você quer mudar no bot: preços, produtos, respostas, horário, mensagens... A nossa equipe faz para você.</p>
+        <form id="req-form" class="stack">
+          <textarea id="req-text" rows="3" placeholder="Ex.: Mudar o preço da pizza calabresa para R$ 55,00 e incluir a pizza de frango com catupiry por R$ 59,90." required></textarea>
+          <div class="row" style="justify-content:space-between">
+            <span class="${over ? 'error' : 'muted'}">Plano ${esc(plan.name)}: ${usage} de ${plan.adjustmentsPerMonth} ajustes usados este mês${over ? ' — novos pedidos podem ser cobrados à parte' : ''}</span>
+            <button class="btn primary">Enviar pedido</button>
+          </div>
+        </form>
+      </section>
+      <section class="card stack">
+        <h3>Meus pedidos</h3>
+        ${requests.length ? requests.map(r => `
+          <div class="request-item">
+            <div class="row" style="justify-content:space-between"><span class="muted">#${r.number} · ${time(r.createdAt)}</span>${requestTag(r.status)}</div>
+            <div class="request-text">${esc(r.text)}</div>
+            ${r.note ? `<div class="request-note">💬 ${esc(r.note)}</div>` : ''}
+          </div>`).join('') : '<p class="muted">Você ainda não fez nenhum pedido.</p>'}
+      </section>
+    </div>`
+  $('#req-form').onsubmit = async e => {
+    e.preventDefault()
+    try {
+      await api('POST', tenantUrl('/requests'), { text: $('#req-text').value })
+      toast('Pedido enviado! Avisaremos por aqui quando estiver pronto. ✔')
+      renderClientRequests()
+    } catch (err) { toast(err.message) }
+  }
+}
+
+// ---------- Configuração do cliente (só o que o Super Admin liberou) ----------
+
+async function renderClientConfig () {
+  const c = await api('GET', tenantUrl('/config'))
+  const info = can('info')
+  const products = can('products')
+  view.innerHTML = `
+    <form id="client-config" class="config">
+      ${info ? `<section class="card stack">
+        <h3>Dados do negócio</h3>
+        <div class="grid2">
+          <label>Horário de funcionamento<input name="hours" value="${esc(c.business.hours)}"></label>
+          <label>Telefone<input name="phone" value="${esc(c.business.phone)}"></label>
+          <label>Endereço<input name="address" value="${esc(c.business.address)}"></label>
+        </div>
+        <label>Descrição do negócio<textarea name="description">${esc(c.business.description)}</textarea></label>
+        <label>Perguntas frequentes e informações extras<textarea name="extraInfo" rows="5">${esc(c.business.extraInfo)}</textarea></label>
+        <p class="muted">Pix, taxa de entrega, promoções e outras informações ficam na aba <b>Conhecimento</b>.</p>
+      </section>` : ''}
+      ${products ? `<section class="card stack">
+        <h3>Produtos e preços</h3>
+        <div id="product-rows">${c.products.map(productRow).join('')}</div>
+        <div><button type="button" class="btn small" id="add-product">+ Adicionar produto</button></div>
+      </section>` : ''}
+      <section class="card stack">
+        <h3>Senha do painel</h3>
+        <label style="max-width:320px">Nova senha<input name="newPassword" type="password" minlength="8" autocomplete="new-password" placeholder="deixe em branco para manter"></label>
+      </section>
+      <p class="muted">Para mudar menu, mensagens ou respostas do bot, peça na aba <b>Ajustes</b>.</p>
+      <div class="save-bar"><button class="btn primary">Salvar</button></div>
+    </form>`
+  const form = $('#client-config')
+  $('#add-product')?.addEventListener('click', () => $('#product-rows').insertAdjacentHTML('beforeend', productRow()))
+  form.addEventListener('click', e => { if (e.target.matches('.remove')) e.target.closest('.edit-row').remove() })
+  form.onsubmit = async e => {
+    e.preventDefault()
+    const v = name => form.elements[name]
+    const body = { ...c, newPassword: v('newPassword').value }
+    if (info) {
+      body.business = {
+        ...c.business,
+        hours: v('hours').value, phone: v('phone').value, address: v('address').value,
+        description: v('description').value, extraInfo: v('extraInfo').value,
+      }
+    }
+    if (products) {
+      body.products = [...form.querySelectorAll('.product-row')].map(r => ({
+        id: r.dataset.id, name: $('[name=name]', r).value, price: $('[name=price]', r).value,
+        description: $('[name=description]', r).value, active: $('[name=active]', r).checked,
+      }))
+    }
+    try {
+      await api('PUT', tenantUrl('/config'), body)
+      toast('Salvo ✔')
+      renderClientConfig()
     } catch (err) { toast(err.message) }
   }
 }

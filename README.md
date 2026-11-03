@@ -65,6 +65,23 @@ WhatsApp**, o QR Code aparece no painel; depois de escaneado, a sessão fica sal
 ⚠️ Conectores **não oficiais** (QR Code) violam os Termos do WhatsApp e podem levar ao banimento do
 número. Para clientes pagantes, considere a API oficial.
 
+## Super Admin e clientes
+
+| Perfil | Login | O que faz |
+|---|---|---|
+| **Super Admin** (você) | ID `admin` + `ADMIN_PASSWORD` do `.env` | Tudo: aba **Clientes**, configuração completa, base de conhecimento, pacotes, ajustes de todos os clientes |
+| **Cliente** | ID do negócio + senha definida pelo admin | Conexão (QR Code), conversas e atendimento, pedidos, simulador, perguntas sem resposta e **pedir ajustes** |
+
+Na aba **Clientes** o Super Admin define, por cliente:
+
+- **O que o cliente pode editar:** *Informações* (horário, endereço, Pix, taxa, promoções...) e/ou *Produtos e preços*.
+  Sem permissão, o cliente não altera nada da configuração — a regra vale no servidor, não só na tela.
+- **Plano e ajustes por mês:** o cliente pede ajustes na aba **Ajustes** e vê "3 de 5 usados este mês";
+  o admin vê os pedidos de todos os clientes, muda o status e responde.
+- **⛔ Suspender / ✅ Reativar:** desliga o WhatsApp, o bot para de responder e o painel do cliente fica bloqueado
+  (para mensalidade atrasada).
+- **👁️ Ver como cliente:** abre o painel exatamente como o cliente vê, com um botão para voltar ao Super Admin.
+
 ## Base de conhecimento (perguntas e respostas)
 
 O bot responde sem IA consultando um banco **SQLite** (`data/knowledge.db`, criado no primeiro início)

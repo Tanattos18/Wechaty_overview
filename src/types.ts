@@ -16,6 +16,31 @@ export interface Product {
   active: boolean
 }
 
+export interface ClientPermissions {
+  /** Horário, endereço, telefone, descrição e as informações da base de conhecimento (Pix, taxa, promoções...). */
+  info: boolean
+  /** Produtos do catálogo: nomes, preços e disponibilidade. */
+  products: boolean
+}
+
+export const DEFAULT_PLAN = { name: 'Básico', adjustmentsPerMonth: 5 }
+
+export type AdjustmentStatus = 'aberto' | 'andamento' | 'feito' | 'recusado'
+
+export const ADJUSTMENT_STATUSES: AdjustmentStatus[] = ['aberto', 'andamento', 'feito', 'recusado']
+
+/** Pedido de ajuste feito pelo cliente no painel (entra no pacote da mensalidade). */
+export interface AdjustmentRequest {
+  id: string
+  number: number
+  text: string
+  status: AdjustmentStatus
+  /** Resposta do Super Admin para o cliente. */
+  note: string
+  createdAt: string
+  updatedAt: string
+}
+
 /** Configuração de um cliente do SaaS (um negócio = um número de WhatsApp). */
 export interface TenantConfig {
   id: string
@@ -51,6 +76,12 @@ export interface TenantConfig {
    * "menu": mostra o menu numerado nas boas-vindas e quando não entende.
    */
   style?: 'human' | 'menu'
+  /** Mensalidade atrasada ou contrato encerrado: bot desligado e painel do cliente bloqueado. */
+  suspended?: boolean
+  /** O que o próprio cliente pode editar no painel (o resto fica com o Super Admin). */
+  clientCan?: ClientPermissions
+  /** Plano contratado: quantos ajustes por mês estão incluídos na mensalidade. */
+  plan?: { name: string; adjustmentsPerMonth: number }
   /** Base de conhecimento: pacotes ativos, informações do negócio e respostas personalizadas. */
   knowledge?: {
     packs: string[]
