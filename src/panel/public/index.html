@@ -124,6 +124,33 @@
     </form>
   </dialog>
 
+  <dialog id="temp-password-dialog">
+    <form method="dialog" class="stack">
+      <h3>Senha provisória de <span id="temp-password-name"></span></h3>
+      <p class="muted">Ela aparece só agora. Mande para o cliente: no primeiro acesso ele cria uma senha nova.</p>
+      <div class="temp-password">
+        <div><span class="muted">ID</span><b id="temp-password-login"></b></div>
+        <div><span class="muted">Senha provisória</span><b id="temp-password-value"></b></div>
+      </div>
+      <label>Recado pronto para enviar<textarea id="temp-password-message" rows="7" readonly></textarea></label>
+      <div class="row end">
+        <button type="button" class="btn" id="temp-password-copy">Copiar recado</button>
+        <button value="ok" class="btn primary">Fechar</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="new-password-dialog">
+    <form id="new-password-form" class="stack">
+      <h3>Crie sua senha</h3>
+      <p class="muted">Você entrou com uma senha provisória. Crie a sua para continuar — ela vale para os próximos acessos.</p>
+      <label>Nova senha<input name="password" type="password" minlength="8" autocomplete="new-password" required></label>
+      <label>Repita a nova senha<input name="confirm" type="password" minlength="8" autocomplete="new-password" required></label>
+      <p class="error" id="new-password-error" role="alert"></p>
+      <div class="row end"><button class="btn primary">Salvar senha</button></div>
+    </form>
+  </dialog>
+
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
   <script src="app.js" type="module"></script>
 </body>

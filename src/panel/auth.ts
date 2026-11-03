@@ -6,6 +6,8 @@ export interface Session {
   tenantId?: string
   /** Super Admin vendo o painel como o cliente ("Ver como cliente"). */
   impersonating?: boolean
+  /** Versão da senha do cliente no login (trocou a senha -> sessão antiga cai). */
+  pv?: number
   exp: number
 }
 
@@ -38,6 +40,8 @@ export class Auth {
     private readonly secret: string,
     /** Cliente suspenso (mensalidade atrasada) perde o acesso ao painel. */
     private readonly isSuspended: (tenantId: string) => boolean = () => false,
+    /** Versão atual da senha do cliente. */
+    private readonly passwordVersion: (tenantId: string) => number = () => 0,
   ) {}
 
   private sign (payload: string): string {
@@ -78,6 +82,11 @@ export class Auth {
     if (!session) { res.status(401).json({ error: 'Faça login.' }); return }
     if (session.role === 'tenant' && !session.impersonating && this.isSuspended(session.tenantId ?? '')) {
       res.status(403).json({ error: 'Acesso suspenso. Entre em contato com o suporte.', suspended: true })
+      return
+    }
+    if (session.role === 'tenant' && !session.impersonating && (session.pv ?? 0) !== this.passwordVersion(session.tenantId ?? '')) {
+      this.clear(res)
+      res.status(401).json({ error: 'A senha foi trocada. Entre de novo com a senha nova.' })
       return
     }
     const tenantId = req.params.tenantId

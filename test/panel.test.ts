@@ -196,6 +196,34 @@ describe('Painel: Super Admin x cliente', () => {
     assert.equal(run.find((r: any) => r.title === 'Fumante')?.ok, true)
   })
 
+  it('redefinir senha: provisória derruba as sessões antigas e o cliente cria a dele no primeiro acesso', async () => {
+    const clientB = browser()
+    assert.equal((await clientB('POST', '/api/login', { tenantId: 'cliente-b', password: 'senha-do-cliente' })).status, 200)
+
+    assert.equal((await clientA('POST', '/api/tenants/cliente-b/reset-password')).status, 403) // só o Super Admin
+    const reset = await admin('POST', '/api/tenants/cliente-b/reset-password')
+    assert.equal(reset.status, 200)
+    assert.match(reset.data.password, /^[a-z2-9]{4}-[a-z2-9]{4}-[a-z2-9]{4}$/)
+    const listed = (await admin('GET', '/api/tenants')).data.find((t: any) => t.id === 'cliente-b')
+    assert.equal(listed.passwordTemporary, true)
+
+    // a sessão aberta com a senha antiga cai; a senha antiga não entra mais
+    assert.equal((await clientB('GET', '/api/tenants/cliente-b/conversations')).status, 401)
+    assert.equal((await browser()('POST', '/api/login', { tenantId: 'cliente-b', password: 'senha-do-cliente' })).status, 401)
+
+    // entra com a provisória e é obrigado a criar uma senha nova
+    const fresh = browser()
+    assert.equal((await fresh('POST', '/api/login', { tenantId: 'cliente-b', password: reset.data.password })).status, 200)
+    assert.equal((await fresh('GET', '/api/me')).data.mustChangePassword, true)
+    assert.equal((await fresh('POST', '/api/me/password', { password: reset.data.password })).status, 400) // igual à provisória
+    assert.equal((await fresh('POST', '/api/me/password', { password: 'curta' })).status, 400)
+    assert.equal((await fresh('POST', '/api/me/password', { password: 'minha-senha-nova' })).status, 200)
+    assert.equal((await fresh('GET', '/api/me')).data.mustChangePassword, false) // continua logado
+    assert.equal((await browser()('POST', '/api/login', { tenantId: 'cliente-b', password: reset.data.password })).status, 401)
+    assert.equal((await browser()('POST', '/api/login', { tenantId: 'cliente-b', password: 'minha-senha-nova' })).status, 200)
+    assert.equal((await admin('POST', '/api/me/password', { password: 'qualquer-coisa' })).status, 403)
+  })
+
   it('ver como cliente: Super Admin entra no painel do cliente e volta', async () => {
     const support = browser()
     await support('POST', '/api/login', { tenantId: 'admin', password: ADMIN_PASSWORD })

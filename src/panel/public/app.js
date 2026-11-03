@@ -296,6 +296,41 @@ async function loadTenants () {
 const isAdmin = () => state.me?.role === 'admin'
 const can = perm => isAdmin() || Boolean(state.me?.clientCan?.[perm])
 
+/** Mostra a senha provisória uma única vez, com o recado pronto para mandar ao cliente. */
+function showTempPassword (name, login, password) {
+  const dialog = $('#temp-password-dialog')
+  const message = `Olá! Seu acesso ao painel do ${document.title || 'bot'}:\n\nEndereço: ${location.origin}\nID: ${login}\nSenha provisória: ${password}\n\nNo primeiro acesso o painel vai pedir para você criar uma senha nova.`
+  $('#temp-password-name').textContent = name
+  $('#temp-password-login').textContent = login
+  $('#temp-password-value').textContent = password
+  $('#temp-password-message').value = message
+  $('#temp-password-copy').onclick = async () => {
+    try { await navigator.clipboard.writeText(message); toast('Recado copiado ✔') } catch { $('#temp-password-message').select() }
+  }
+  dialog.showModal()
+}
+
+/** Senha provisória: o cliente só usa o painel depois de criar a dele. */
+function askNewPassword () {
+  const dialog = $('#new-password-dialog')
+  const form = $('#new-password-form')
+  $('#new-password-error').textContent = ''
+  form.reset()
+  dialog.addEventListener('cancel', e => e.preventDefault()) // não fecha com Esc
+  form.onsubmit = async e => {
+    e.preventDefault()
+    const password = form.password.value
+    if (password !== form.confirm.value) { $('#new-password-error').textContent = 'As duas senhas não são iguais.'; return }
+    try {
+      await api('POST', '/api/me/password', { password })
+      dialog.close()
+      state.me.mustChangePassword = false
+      toast('Senha criada ✔ Use ela nos próximos acessos.')
+    } catch (err) { $('#new-password-error').textContent = err.message }
+  }
+  dialog.showModal()
+}
+
 async function boot () {
   state.me = await api('GET', '/api/me')
   $('#login').classList.add('hidden')
@@ -324,6 +359,7 @@ async function boot () {
   state.alerts = null
   openTab(state.tab)
   renderAlertsButton()
+  if (state.me.mustChangePassword) askNewPassword()
   updateBadges().catch(() => {})
   boot.badges ??= setInterval(() => updateBadges().catch(() => {}), 8000)
 }
@@ -1085,7 +1121,7 @@ async function renderConfig () {
       <section class="card stack">
         <h3>Acesso ao painel</h3>
         ${isAdmin ? `<label class="check"><input type="checkbox" name="active" ${c.active ? 'checked' : ''}> Cliente ativo</label>` : ''}
-        <p class="muted">ID de login: <b>${esc(c.id)}</b> · ${c.hasPassword ? 'Senha definida' : 'Sem senha — o cliente ainda não consegue entrar'}</p>
+        <p class="muted">ID de login: <b>${esc(c.id)}</b> · ${!c.hasPassword ? 'Sem senha — o cliente ainda não consegue entrar (crie em Clientes → Criar senha)' : c.passwordTemporary ? 'Senha provisória — o cliente cria a dele no primeiro acesso' : 'Senha definida (esqueceu? Clientes → Redefinir senha)'}</p>
         <label style="max-width:320px">Nova senha do painel<input name="newPassword" type="password" minlength="8" autocomplete="new-password" placeholder="deixe em branco para manter"></label>
       </section>
 
@@ -1533,7 +1569,7 @@ async function renderClients () {
         <thead><tr><th>Cliente</th><th>WhatsApp</th><th>Plano e ajustes do mês</th><th>O cliente pode editar</th><th>Ações</th></tr></thead>
         <tbody>${tenants.map(t => `
           <tr data-id="${esc(t.id)}" class="${t.suspended ? 'suspended' : ''}">
-            <td><strong>${esc(t.name)}</strong><br><span class="muted">ID: ${esc(t.id)}${t.hasPassword ? '' : ' · <span class="tag human">sem senha</span>'}</span>
+            <td><strong>${esc(t.name)}</strong><br><span class="muted">ID: ${esc(t.id)}${!t.hasPassword ? ' · <span class="tag human">sem senha</span>' : t.passwordTemporary ? ' · <span class="tag">senha provisória</span>' : ''}</span>
               ${t.openRequests ? `<br><span class="tag alert">${t.openRequests} ajuste(s) pendente(s)</span>` : ''}</td>
             <td>${statusPill(t)}<br><span class="muted">${t.conversations} conversa(s)</span></td>
             <td>
@@ -1552,6 +1588,7 @@ async function renderClients () {
               <button class="btn small primary" data-act="save">Salvar</button>
               <button class="btn small" data-act="view" ${t.suspended ? 'disabled' : ''}>👁️ Ver como cliente</button>
               <button class="btn small" data-act="open">Abrir</button>
+              <button class="btn small" data-act="password">🔑 ${t.hasPassword ? 'Redefinir senha' : 'Criar senha'}</button>
               <button class="btn small ${t.suspended ? '' : 'danger'}" data-act="suspend">${t.suspended ? '✅ Reativar' : '⛔ Suspender'}</button>
             </td>
           </tr>`).join('')}
@@ -1559,7 +1596,8 @@ async function renderClients () {
       </table>
     </div>
     <p class="muted" style="margin-top:.8rem">⛔ <b>Suspender</b> desliga o WhatsApp do cliente e bloqueia o painel dele até você reativar (use para mensalidade atrasada).
-      👁️ <b>Ver como cliente</b> abre o painel exatamente como o cliente vê.</p>`
+      👁️ <b>Ver como cliente</b> abre o painel exatamente como o cliente vê.
+      🔑 <b>Redefinir senha</b> gera uma senha provisória para o cliente que esqueceu a dele; no primeiro acesso ele cria uma nova.</p>`
     : '<div class="card empty">Nenhum cliente ainda. Use “+ Novo cliente”.</div>'
 
   view.querySelector('table')?.addEventListener('click', async e => {
@@ -1591,6 +1629,10 @@ async function renderClients () {
         $('#tenant-select').value = id
         openTab('connection')
         return
+      } else if (btn.dataset.act === 'password') {
+        if (t.hasPassword && !confirm(`Redefinir a senha de ${t.name}? A senha atual deixa de funcionar e o cliente sai do painel em todos os aparelhos.`)) return
+        const r = await api('POST', `/api/tenants/${encodeURIComponent(id)}/reset-password`)
+        showTempPassword(t.name, r.login, r.password)
       }
       await loadTenants()
       renderClients()

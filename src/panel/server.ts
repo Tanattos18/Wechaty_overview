@@ -29,9 +29,17 @@ const here = path.dirname(fileURLToPath(import.meta.url))
 const DAY_FMT = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo' }) // AAAA-MM-DD
 const ADMIN_LOGIN = 'admin'
 
+/** Senha provisória fácil de ditar: 3 blocos de 4, sem letras/números que se confundem (ex.: k7mq-4tpz-9xhd). */
+function temporaryPassword (): string {
+  const chars = 'abcdefghjkmnpqrstuvwxyz23456789'
+  const bytes = crypto.randomBytes(12)
+  const s = [...bytes].map(b => chars[b % chars.length]).join('')
+  return `${s.slice(0, 4)}-${s.slice(4, 8)}-${s.slice(8, 12)}`
+}
+
 /** Remove o hash da senha antes de mandar ao navegador. */
 function publicTenant (t: TenantConfig) {
-  const { panelPasswordHash, ...rest } = t
+  const { panelPasswordHash, passwordVersion, ...rest } = t
   return { ...rest, hasPassword: Boolean(panelPasswordHash) }
 }
 
@@ -51,7 +59,15 @@ function conversationSummary (c: Conversation) {
 
 export function createPanel (deps: PanelDeps) {
   const { store, engine, bots } = deps
-  const auth = new Auth(deps.sessionSecret, id => Boolean(store.getTenant(id)?.suspended))
+  const auth = new Auth(deps.sessionSecret, id => Boolean(store.getTenant(id)?.suspended), id => store.getTenant(id)?.passwordVersion ?? 0)
+
+  /** Troca a senha do cliente; sessões abertas com a senha anterior deixam de valer. */
+  const setPassword = (tenant: TenantConfig, password: string, temporary: boolean): TenantConfig => ({
+    ...tenant,
+    panelPasswordHash: hashPassword(password),
+    passwordVersion: (tenant.passwordVersion ?? 0) + 1,
+    ...(temporary ? { passwordTemporary: true } : { passwordTemporary: undefined }),
+  })
   const app = express()
   app.disable('x-powered-by')
   // Atrás do Nginx (VPS): usa o IP real do visitante no limite de tentativas de login
@@ -92,7 +108,7 @@ export function createPanel (deps: PanelDeps) {
     if (asAdmin && deps.adminPassword && safeEqual(password, deps.adminPassword)) {
       session = { role: 'admin' }
     } else if (!asAdmin && verifyPassword(password, store.getTenant(tenantId)?.panelPasswordHash)) {
-      session = { role: 'tenant', tenantId }
+      session = { role: 'tenant', tenantId, pv: store.getTenant(tenantId)?.passwordVersion ?? 0 }
     }
     if (!session) {
       const prev = f && f.until > Date.now() ? f.count : 0
@@ -119,6 +135,8 @@ export function createPanel (deps: PanelDeps) {
       ...session,
       tenantName: tenant?.name,
       clientCan: permissions(tenant),
+      // Senha provisória: o painel pede para criar uma nova antes de continuar
+      mustChangePassword: Boolean(tenant?.passwordTemporary) && !session.impersonating,
       plan: tenant?.plan ?? DEFAULT_PLAN,
       usage: tenant ? adjustmentsThisMonth(tenant.id) : 0,
     })
@@ -150,6 +168,7 @@ export function createPanel (deps: PanelDeps) {
           usage: adjustmentsThisMonth(t.id),
           openRequests: store.listRequests(t.id).filter(r => r.status === 'aberto' || r.status === 'andamento').length,
           hasPassword: Boolean(t.panelPasswordHash),
+          passwordTemporary: Boolean(t.passwordTemporary),
           conversations: store.listConversations(t.id).length,
         } : {}),
       }))
@@ -177,6 +196,33 @@ export function createPanel (deps: PanelDeps) {
     res.json(publicTenant(updated))
   })
 
+  /**
+   * Super Admin redefine a senha do cliente (esqueceu, trocou e não lembra): gera uma senha provisória,
+   * mostrada uma única vez. No próximo acesso o cliente é obrigado a criar a dele.
+   */
+  app.post('/api/tenants/:tenantId/reset-password', auth.required, auth.adminOnly, (req, res) => {
+    const tenant = tenantOr404(req, res)
+    if (!tenant) return
+    const password = temporaryPassword()
+    store.saveTenant(setPassword(tenant, password, true))
+    res.json({ password, login: tenant.id })
+  })
+
+  /** O cliente cria a própria senha (obrigatório depois de uma senha provisória). */
+  app.post('/api/me/password', auth.required, (req, res) => {
+    const session = res.locals.session as Session
+    if (session.role !== 'tenant' || session.impersonating) { res.status(403).json({ error: 'Só o próprio cliente troca a senha por aqui.' }); return }
+    const tenant = store.getTenant(session.tenantId ?? '')
+    if (!tenant) { res.status(404).json({ error: 'Cliente não encontrado.' }); return }
+    const password = String(req.body?.password ?? '')
+    if (password.length < 8) { res.status(400).json({ error: 'A senha precisa ter pelo menos 8 caracteres.' }); return }
+    if (verifyPassword(password, tenant.panelPasswordHash)) { res.status(400).json({ error: 'Escolha uma senha diferente da provisória.' }); return }
+    const updated = setPassword(tenant, password, false)
+    store.saveTenant(updated)
+    auth.issue(res, { role: 'tenant', tenantId: tenant.id, pv: updated.passwordVersion }) // continua logado
+    res.json({ ok: true })
+  })
+
   /** Super Admin entra no painel como o cliente, para dar suporte. */
   app.post('/api/tenants/:tenantId/impersonate', auth.required, auth.adminOnly, (req, res) => {
     const tenant = tenantOr404(req, res)
@@ -202,8 +248,7 @@ export function createPanel (deps: PanelDeps) {
     const segment = String(req.body?.segment ?? '')
     const tenant = newTenant(id, name, deps.knowledge.getPack(segment) ? segment : undefined)
     const password = String(req.body?.password ?? '')
-    if (password) tenant.panelPasswordHash = hashPassword(password)
-    store.saveTenant(tenant)
+    store.saveTenant(password ? setPassword(tenant, password, false) : tenant)
     res.status(201).json(publicTenant(tenant))
   })
 
@@ -236,7 +281,10 @@ export function createPanel (deps: PanelDeps) {
     const newPassword = String(req.body?.newPassword ?? '')
     if (newPassword) {
       if (newPassword.length < 8) { res.status(400).json({ error: 'A senha precisa ter pelo menos 8 caracteres.' }); return }
-      updated.panelPasswordHash = hashPassword(newPassword)
+      updated = setPassword(updated, newPassword, false)
+      // O próprio cliente trocou: continua logado com a senha nova
+      const session = res.locals.session as Session
+      if (session.role === 'tenant' && !session.impersonating) auth.issue(res, { role: 'tenant', tenantId: updated.id, pv: updated.passwordVersion })
     }
     store.saveTenant(updated)
     res.json(publicTenant(updated))

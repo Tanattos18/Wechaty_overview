@@ -61,6 +61,10 @@ export interface TenantConfig {
   active: boolean
   /** Hash scrypt da senha do painel do cliente. Nunca é enviado ao navegador. */
   panelPasswordHash?: string
+  /** Senha provisória (criada pelo Super Admin): no próximo acesso o cliente cria a dele. */
+  passwordTemporary?: boolean
+  /** Muda a cada troca de senha: sessões abertas com a senha antiga deixam de valer. */
+  passwordVersion?: number
   business: {
     description: string
     hours: string

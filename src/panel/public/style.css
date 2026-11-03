@@ -460,3 +460,9 @@ dialog[open] { animation: enter .18s ease-out; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
 }
+
+/* Senha provisória */
+.temp-password { display: grid; grid-template-columns: 1fr 1fr; gap: .75rem; padding: .9rem 1rem; border-radius: 12px; background: var(--surface-2, rgba(127,127,127,.08)); }
+.temp-password div { display: flex; flex-direction: column; gap: .15rem; }
+.temp-password b { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 1.15rem; letter-spacing: .03em; user-select: all; }
+#temp-password-message { font-size: .9rem; }

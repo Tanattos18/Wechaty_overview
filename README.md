@@ -94,6 +94,10 @@ Na aba **Clientes** o Super Admin define, por cliente:
   (para mensalidade atrasada).
 - **👁️ Ver como cliente:** abre o painel exatamente como o cliente vê, com um botão para voltar ao Super Admin.
 
+### Cliente esqueceu a senha
+
+Em **Clientes → 🔑 Redefinir senha** o Super Admin gera uma **senha provisória** (mostrada uma única vez, com um recado pronto para copiar e mandar ao cliente). A senha antiga para de funcionar e o cliente sai do painel em todos os aparelhos; no primeiro acesso com a provisória o painel obriga a criar uma senha nova.
+
 ## Base de conhecimento (perguntas e respostas)
 
 O bot responde sem IA consultando um banco **SQLite** (`data/knowledge.db`, criado no primeiro início)
