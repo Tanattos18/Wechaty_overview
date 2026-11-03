@@ -360,19 +360,25 @@ export class KnowledgeBase {
     return index
   }
 
-  /** Procura a pergunta mais parecida nos pacotes ativos do cliente. */
-  match (tenant: TenantConfig, text: string, minScore = MIN_SCORE): KbResult | undefined {
+  /**
+   * Notas de todos os assuntos para a mensagem, da maior para a menor.
+   * Nota do assunto = 60% a pergunta mais parecida + 40% o vocabulário do assunto todo.
+   * Inclui as formas de perguntar ensinadas só a este cliente (tela "Treinar").
+   */
+  private rank (tenant: TenantConfig, text: string): { entry: Entry; score: number }[] {
     const knowledge = tenantKnowledge(tenant)
-    if (knowledge.packs.length === 0) return undefined
+    if (knowledge.packs.length === 0) return []
     const msg = kbTokens(text)
     // Só palavras genéricas ("quero", "pode", "como"...) não indicam assunto nenhum
-    if (msg.length === 0 || msg.every(t => GENERIC_WORDS.has(t))) return undefined
+    if (msg.length === 0 || msg.every(t => GENERIC_WORDS.has(t))) return []
     const norm = normalizeText(text)
 
-    // Nota do assunto = 60% a pergunta mais parecida + 40% o vocabulário do assunto todo
     const index = this.index(knowledge.packs)
-    let best: { entry: Entry; score: number } | undefined
-    for (const group of index.topics) {
+    const ranked: { entry: Entry; score: number }[] = []
+    for (const base of index.topics) {
+      const key = `${base.entries[0].packId}/${base.entries[0].topic}`
+      const taught = knowledge.extraQuestions[key] ?? []
+      const group = taught.length ? withTaught(base, taught) : base
       let top: { entry: Entry; score: number } | undefined
       for (const entry of group.entries) {
         const s = entry.norm === norm ? 2 : sentenceScore(index, msg, entry)
@@ -380,12 +386,56 @@ export class KnowledgeBase {
       }
       if (!top) continue
       const s = top.score >= 2 ? 1 : 0.6 * top.score + 0.4 * coverage(index, msg, group)
-      if (!best || s > best.score) best = { entry: top.entry, score: s }
+      ranked.push({ entry: top.entry, score: s })
     }
-    if (!best || best.score < minScore) return undefined
+    return ranked.sort((a, b) => b.score - a.score)
+  }
 
-    const { entry } = best
-    const base = { packId: entry.packId, topic: entry.topic, title: entry.title, score: round(best.score), question: entry.question }
+  /** Procura a pergunta mais parecida nos pacotes ativos do cliente. */
+  match (tenant: TenantConfig, text: string, minScore = MIN_SCORE): KbResult | undefined {
+    const best = this.rank(tenant, text)[0]
+    if (!best || best.score < minScore) return undefined
+    return this.resolve(tenant, best.entry, best.score)
+  }
+
+  /**
+   * Assuntos "quase lá" (semelhança entre `floor` e o mínimo), para o bot perguntar
+   * "Você quis dizer…?" em vez de chutar uma resposta errada.
+   */
+  candidates (tenant: TenantConfig, text: string, floor = 0.4, limit = 3): { key: string; title: string; score: number }[] {
+    const ranked = this.rank(tenant, text)
+    if (!ranked.length || ranked[0].score >= MIN_SCORE) return []
+    return ranked.filter(r => r.score >= floor).slice(0, limit)
+      .map(r => ({ key: `${r.entry.packId}/${r.entry.topic}`, title: r.entry.title, score: round(r.score) }))
+  }
+
+  /** Resposta de um assunto escolhido pela chave "pacote/assunto" (ex.: depois do "Você quis dizer…?"). */
+  answerFor (tenant: TenantConfig, key: string): KbResult | undefined {
+    const [packId, topic] = key.split('/')
+    const row = this.db.prepare('SELECT pack_id, key, title, answer, action FROM topics WHERE pack_id = ? AND key = ?').get(packId, topic) as any
+    if (!row) return undefined
+    return this.resolve(tenant, {
+      packId: row.pack_id, topic: row.key, title: row.title, answer: row.answer, action: row.action ?? undefined,
+      question: row.title, norm: '', tokens: [],
+    }, 1)
+  }
+
+  /** Ensina uma nova forma de perguntar a todos os clientes (grava no pacote). */
+  addPackQuestion (key: string, text: string): boolean {
+    const [packId, topic] = key.split('/')
+    const row = this.db.prepare('SELECT id FROM topics WHERE pack_id = ? AND key = ?').get(packId, topic) as { id: number } | undefined
+    const norm = normalizeText(text)
+    if (!row || !norm) return false
+    const exists = this.db.prepare('SELECT 1 FROM questions WHERE topic_id = ? AND norm = ?').get(row.id, norm)
+    if (!exists) this.db.prepare('INSERT INTO questions (topic_id, text, norm) VALUES (?, ?, ?)').run(row.id, text.trim().slice(0, 300), norm)
+    this.indexes.clear()
+    return true
+  }
+
+  /** Aplica a resposta personalizada do cliente e preenche as {variáveis}. */
+  private resolve (tenant: TenantConfig, entry: Entry, score: number): KbResult {
+    const knowledge = tenantKnowledge(tenant)
+    const base = { packId: entry.packId, topic: entry.topic, title: entry.title, score: round(score), question: entry.question }
     const override = knowledge.overrides[`${entry.packId}/${entry.topic}`]
     if (override?.enabled === false) return { status: 'missing', ...base, missing: [] }
 
@@ -428,6 +478,7 @@ export interface TenantKnowledge {
   packs: string[]
   variables: Record<string, string>
   overrides: Record<string, { answer?: string; enabled?: boolean }>
+  extraQuestions: Record<string, string[]>
 }
 
 export function tenantKnowledge (tenant: TenantConfig): TenantKnowledge {
@@ -435,8 +486,22 @@ export function tenantKnowledge (tenant: TenantConfig): TenantKnowledge {
     packs: tenant.knowledge?.packs ?? ['comum'],
     variables: tenant.knowledge?.variables ?? {},
     overrides: tenant.knowledge?.overrides ?? {},
+    extraQuestions: tenant.knowledge?.extraQuestions ?? {},
   }
 }
+
+/** Acrescenta ao assunto as frases ensinadas a este cliente. */
+function withTaught (group: TopicGroup, taught: string[]): TopicGroup {
+  const model = group.entries[0]
+  const extra = taught.map(q => {
+    const norm = normalizeText(q)
+    return { ...model, question: q, norm, tokens: kbTokens(norm) }
+  })
+  const entries = [...group.entries, ...extra]
+  return { entries, vocabulary: [...new Set(entries.flatMap(e => e.tokens))] }
+}
+
+export { normalizeText as normalizeKbText }
 
 function tenantVariables (tenant: TenantConfig): Record<string, string> {
   return {

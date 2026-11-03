@@ -166,6 +166,36 @@ describe('Painel: Super Admin x cliente', () => {
     assert.equal((await clientA('GET', '/api/tenants/cliente-a/conversations')).status, 200)
   })
 
+  it('👎 → Treinar → o bot aprende; salvar a configuração não apaga o que foi ensinado', async () => {
+    await admin('PATCH', '/api/tenants/cliente-b/admin', { suspended: false })
+    const sim = await admin('POST', '/api/tenants/cliente-b/simulate', { text: 'vocês tem área pra fumante?' })
+    const chat = encodeURIComponent(sim.data.chatId)
+    const conv = (await admin('GET', `/api/tenants/cliente-b/conversations/${chat}`)).data
+    const botMsg = conv.messages.find((m: any) => m.from === 'bot')
+    assert.equal((await admin('POST', `/api/tenants/cliente-b/conversations/${chat}/feedback`, { at: botMsg.at })).data.feedback, 'bad')
+
+    const queue = (await admin('GET', '/api/tenants/cliente-b/knowledge/unanswered')).data
+    const item = queue.find((u: any) => /fumante/.test(u.text))
+    assert.ok(item, 'a pergunta foi para a fila de treino')
+    const train = await admin('POST', '/api/tenants/cliente-b/knowledge/train', { text: item.text, key: 'comum/estacionamento', unansweredId: item.id })
+    assert.equal(train.status, 200)
+    assert.equal(knowledge.match(store.getTenant('cliente-b')!, 'vocês tem área pra fumante?')?.topic, 'estacionamento')
+    assert.ok(!(await admin('GET', '/api/tenants/cliente-b/knowledge/unanswered')).data.some((u: any) => u.id === item.id))
+
+    // salvar a configuração pelo painel mantém as frases ensinadas
+    const cfg = (await admin('GET', '/api/tenants/cliente-b/config')).data
+    await admin('PUT', '/api/tenants/cliente-b/config', cfg)
+    assert.ok(store.getTenant('cliente-b')!.knowledge?.extraQuestions?.['comum/estacionamento']?.length)
+
+    // exportar conversas e salvar como teste
+    const exp = await fetch(`${base}/api/tenants/cliente-b/conversations-export?format=txt`, { headers: {} })
+    assert.equal(exp.status, 401) // sem login não exporta
+    const saved = await admin('POST', `/api/tenants/cliente-b/conversations/${chat}/save-test`, { title: 'Fumante' })
+    assert.equal(saved.status, 201)
+    const run = (await admin('POST', '/api/tenants/cliente-b/tests/run')).data
+    assert.equal(run.find((r: any) => r.title === 'Fumante')?.ok, true)
+  })
+
   it('ver como cliente: Super Admin entra no painel do cliente e volta', async () => {
     const support = browser()
     await support('POST', '/api/login', { tenantId: 'admin', password: ADMIN_PASSWORD })

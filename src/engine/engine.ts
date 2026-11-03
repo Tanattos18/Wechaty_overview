@@ -1,6 +1,6 @@
 import type { KbResult } from '../knowledge/kb.js'
 import type { Store } from '../store.js'
-import type { AiResponder, Channel, Conversation, MenuOption, Product, TenantConfig } from '../types.js'
+import type { AiResponder, Channel, Conversation, MenuOption, Product, ProductOption, TenantConfig } from '../types.js'
 import {
   detectIntents, findProduct, keywords, parseQuantity, searchKnowledge, similar, splitGreeting, splitItems, type Intent,
 } from './nlu.js'
@@ -18,6 +18,10 @@ export interface IncomingMessage {
 export interface KnowledgeMatcher {
   match (tenant: TenantConfig, text: string): KbResult | undefined
   logUnanswered (tenantId: string, text: string, topic?: string): void
+  /** Assuntos "quase lá", para perguntar "Você quis dizer…?" */
+  candidates? (tenant: TenantConfig, text: string): { key: string; title: string; score: number }[]
+  /** Resposta de um assunto pela chave "pacote/assunto". */
+  answerFor? (tenant: TenantConfig, key: string): KbResult | undefined
 }
 
 export interface EngineDeps {
@@ -47,7 +51,17 @@ const TOTAL_RE = /\b(quanto (deu|ficou|vai dar|vai ficar)|quanto (e|ta|esta|fica
 const NOT_PRODUCT_RE = /^(estacionamento|vaga|wifi|wi|internet|banheiro|cadeira|mesa|reserva|entrega|delivery|frete|taxa|pix|cartao|credito|debito|dinheiro|troco|desconto|promoc|cupom|parcel|emprego|horario|atendimento|atendente|acessibilidade|rampa|ar|climatiza|espaco|kids|brinquedo|musica|show|tele|telefone|whatsapp|site|instagram|endereco|loja|unidade|filial|nota|fiscal|garantia|troca|devoluc|agenda|horar)/
 
 const ACK_WORDS = new Set(['boa', 'show', 'top', 'massa', 'otimo', 'legal', 'joia', 'combinado', 'fechou', 'tranquilo', 'entendi', 'ta bom', 'ta', 'tabom', 'perfeito', 'beleza', 'blz', 'certo', 'ok', 'okay', 'oks', 'show de bola', 'maravilha'])
-const OTHER_OPTIONS_RE = /\b((tem|teria) (outro|outra|outros|outras|mais) (sabor|sabores|opcao|opcoes|tipo|tipos|pizza|pizzas)|(outro|outros|mais) (sabor|sabores|opcoes)|so tem (esse|esses|essa|essas|isso)|tem mais (alguma coisa|opcao|opcoes|sabor|sabores))\b/
+const OTHER_OPTIONS_RE = /\b((tem|teria) (outro|outra|outros|outras|mais) (sabor|sabores|opcao|opcoes|tipo|tipos|pizza|pizzas)|(tem|teria) (outros|outras)\b|(outro|outros|mais) (sabor|sabores|opcoes)|so tem (esse|esses|essa|essas|isso)|tem mais (alguma coisa|opcao|opcoes|sabor|sabores))\b/
+/** "já pedi", "olha aí", "já falei" — o cliente acha que o bot ignorou o pedido. */
+const ALREADY_ORDERED_RE = /\b(ja pedi|eu ja pedi|ja falei|ja escolhi|ja mandei|olha ai|ja disse|eu pedi ja)\b/
+/** Referência ao último produto citado: "ela", "essa", "esse aí". */
+const REF_RE = /\b(ela|ele|essa|esse|dessa|desse|nessa|nesse|dela|dele|essa ai|esse ai|mesma|mesmo)\b/
+/** Pedido do item citado: "quero essa", "manda ela", "pode ser essa", "quero ela tbm". */
+const REF_ORDER_RE = /\b(quero|queria|vou querer|manda|pode ser|me ve|anota|coloca|adiciona)\s+(a |o )?(essa|esse|ela|ele|essa ai|esse ai|dessa|desse|promocao|promo|combo)\b/
+/** "mais uma", "mais 2", "outra dessa". */
+const MORE_RE = /\b(?:mais|\+)\s*(\d{1,2}|uma|um|duas|dois|tres)\b(?!\s+(?:de|do|da)\b)|\b(?:outra|outro) (?:dessa|desse|igual)\b/
+const PROMO_RE = /\b(promocao|promocoes|promo|combo|oferta)\b/
+const HALF_RE = /\b(meio a meio|metade|meia|meio)\b/
 const INFO_INTENTS: Intent[] = ['hours', 'address', 'phone', 'delivery', 'payment']
 const QUESTION_RE = /\?\s*$|^(qual|quais|como|onde|quando|quanto|o que|que|tem|voces|vcs|e)\b/
 
@@ -89,10 +103,27 @@ export class Engine {
     store.appendMessage(conv, 'customer', msg.text, this.now())
     conv.unread++
 
+    conv.lastKind = 'other'
     const replies = (await this.route(tenant, conv, msg.text.trim())).filter(Boolean)
-    for (const reply of replies) store.appendMessage(conv, 'bot', reply, this.now())
+    replies.forEach((reply, i) => {
+      store.appendMessage(conv, 'bot', reply, this.now())
+      // O tipo da resposta vai na primeira mensagem (alimenta o painel de qualidade)
+      if (i === 0) conv.messages[conv.messages.length - 1].kind = conv.lastKind
+    })
     store.saveConversations(tenant.id)
     return replies
+  }
+
+  /** Ensina ao cliente uma forma de perguntar (escolha no "Você quis dizer…?" ou tela Treinar). */
+  learn (tenant: TenantConfig, key: string, text: string): void {
+    const phrase = text.trim().slice(0, 300)
+    if (phrase.length < 3) return
+    const current = this.deps.store.getTenant(tenant.id) ?? tenant
+    const knowledge = current.knowledge ?? { packs: ['comum'], variables: {}, overrides: {} }
+    const extra = { ...(knowledge.extraQuestions ?? {}) }
+    const list = extra[key] ?? []
+    if (!list.some(q => normalize(q) === normalize(phrase))) extra[key] = [...list, phrase].slice(-100)
+    this.deps.store.saveTenant({ ...current, knowledge: { ...knowledge, extraQuestions: extra } })
   }
 
   /** Atendente assumiu a conversa pelo painel: o bot fica em silêncio. */
@@ -118,7 +149,8 @@ export class Engine {
   }
 
   private async route (tenant: TenantConfig, conv: Conversation, text: string): Promise<string[]> {
-    const n = normalize(text)
+    // Sinônimos do cliente: "coca" -> "refrigerante", "4 queijos" -> "quatro queijos"
+    const n = applySynonyms(tenant, normalize(text))
 
     if (conv.state === 'human') {
       const since = conv.humanSince ? new Date(conv.humanSince).getTime() : 0
@@ -137,11 +169,30 @@ export class Engine {
       conv.offer = undefined
       const qty = /^\d{1,2}$/.test(bare) ? Number(bare) : YES.has(bare) ? 1 : 0
       if (product && qty > 0) {
-        this.addToCart(conv, product, qty)
         conv.state = 'catalog'
-        return [`${this.pick(PHRASES.added)} ${qty}x ${product.name}.\n\n${this.cartText(conv)}`]
+        const label = this.addProduct(conv, product, qty, n)
+        return [label ? this.addedText(conv, [label]) : this.sizeQuestion(tenant, conv)]
       }
       if (product && NO.has(bare)) return [this.pick(PHRASES.offerDecline)]
+    }
+
+    // Resposta ao "Você quis dizer…?": responde o assunto escolhido e aprende a frase original
+    if (conv.choice) {
+      const choice = conv.choice
+      conv.choice = undefined
+      const index = /^\d$/.test(bare) ? Number(bare) - 1 : choice.options.findIndex(o => normalize(o.title) === bare)
+      const option = choice.options[index]
+      if (option && this.deps.knowledge?.answerFor) {
+        this.learn(tenant, option.key, choice.text)
+        const kb = this.deps.knowledge.answerFor(tenant, option.key)
+        if (kb?.status === 'answer') return this.knowledgeReply(tenant, conv, kb).replies ?? []
+        conv.lastKind = 'fallback'
+        return [`${this.pick(PHRASES.noInfo)} ${this.pick(PHRASES.offerHuman)}`]
+      }
+      if (NO.has(bare) || /^(nenhum|nenhuma|outra coisa|nada disso)$/.test(bare)) {
+        conv.lastKind = 'fallback'
+        return ['Tudo bem! Pode me explicar de outro jeito? Se preferir, digite *atendente* que alguém da equipe te ajuda. 😊']
+      }
     }
 
     if (MENU_WORDS.has(bare)) return [this.showMenu(tenant, conv)]
@@ -152,6 +203,12 @@ export class Engine {
       conv.checkout = {}
       conv.state = 'menu'
       return [hadOrder ? `${this.pick(PHRASES.cancelled)} ${this.pick(PHRASES.followUp)}` : `Tudo bem! ${this.pick(PHRASES.howCanIHelp)}`]
+    }
+
+    // Esperando o tamanho ("Qual tamanho da Calabresa?"): aceita o número ou o nome do tamanho
+    if (conv.pendingSize?.length) {
+      const reply = this.resolvePendingSize(tenant, conv, bare)
+      if (reply) return [reply]
     }
 
     // Só pontuação ou emoji ("?", "👍"): responde conforme o momento da conversa
@@ -243,6 +300,7 @@ export class Engine {
     // Registra para o cliente (e, no futuro, a IA) completar a base de conhecimento
     this.deps.knowledge?.logUnanswered(tenant.id, rest, missingTopic)
     conv.misses = (conv.misses ?? 0) + 1
+    conv.lastKind = 'fallback'
 
     // Pergunta sem resposta cadastrada: diz isso e oferece o atendente
     if (QUESTION_RE.test(rest)) {
@@ -271,6 +329,10 @@ export class Engine {
     if (has('thanks') && short) return { replies: [this.pick(PHRASES.thanks).replace('{nome}', name ? `, ${name}` : '')] }
     if (has('bye') && short) return { replies: [this.pick(PHRASES.bye)] }
 
+    // "já pedi, olha aí": desculpa e mostra o pedido
+    if (ALREADY_ORDERED_RE.test(n)) {
+      return { replies: [conv.cart.length ? `Desculpa a confusão! 😅 Seu pedido está assim:\n\n${this.cartText(conv)}` : this.totalText(tenant, conv)] }
+    }
     // "quanto deu tudo?", "quanto devo pagar": o total do pedido, não as formas de pagamento
     if (TOTAL_RE.test(n)) return { replies: [this.totalText(tenant, conv)] }
     // "boa", "show", "combinado": confirmação curta
@@ -281,25 +343,54 @@ export class Engine {
           : '😊 Qualquer coisa, é só chamar!'],
       }
     }
-    // "tem outro sabor?", "só tem esses?": lista curta do que existe
-    if (OTHER_OPTIONS_RE.test(n)) return { replies: [this.optionsSummary(tenant, conv)] }
-
-    // Produtos: pedir pelo nome ("quero 2 calabresa") ou perguntar de um produto específico
     const products = this.activeProducts(tenant)
     const match = findProduct(products, n)
+    const wantsOthers = OTHER_OPTIONS_RE.test(n)
+
+    // Memória curta: "quero essa", "quero ela também", "mais uma", "quanto custa ela?"
+    // (o último produto citado — inclusive a promoção que acabou de ser apresentada)
+    const promo = promoProduct(products)
+    const refTarget = match.kind === 'one' && REF_ORDER_RE.test(n)
+      ? match.product // "e a promoção? quero ela"
+      : match.kind === 'none'
+        ? (PROMO_RE.test(n) && promo) || (conv.lastProduct ? products.find(p => p.id === conv.lastProduct) : undefined)
+        : undefined
+    if (refTarget) {
+      const more = MORE_RE.exec(n)
+      const wantsIt = REF_ORDER_RE.test(n) || (PROMO_RE.test(n) && has('order'))
+      if (wantsIt || more) {
+        const qty = more?.[1] ? clampQty(parseQuantity(more[1])) : 1
+        const label = this.addProduct(conv, refTarget, qty, n)
+        conv.state = 'catalog'
+        const replies = [label ? this.addedText(conv, [label]) : this.sizeQuestion(tenant, conv)]
+        if (wantsOthers) replies.push(this.optionsSummary(tenant, conv))
+        return { replies }
+      }
+      if (REF_RE.test(n) && (has('price') || isQuestion)) return { replies: [this.describeProduct(refTarget, conv, n)] }
+    }
+    // "tem outro sabor?", "só tem esses?", "teria outras": lista curta do que existe
+    if (wantsOthers) return { replies: [this.optionsSummary(tenant, conv)] }
+
+    // "meio calabresa meio margherita" já é um pedido (quando o cliente monta meio a meio)
+    if (tenant.halfHalf && HALF_RE.test(n) && !isQuestion) {
+      const half = this.tryHalfHalf(tenant, conv, n)
+      if (half) return { replies: [half] }
+    }
+
+    // Produtos: pedir pelo nome ("quero 2 calabresa") ou perguntar de um produto específico
     const wantsToOrder = has('order') && !isQuestion
     const catalogOnScreen = conv.state === 'catalog' || lastBotWasCatalog(conv)
     if (wantsToOrder || (conv.state === 'catalog' && match.kind === 'one' && !isQuestion && !asksInfo)) {
       const reply = this.addItemsByName(tenant, conv, n, catalogOnScreen)
       if (reply) return { replies: [reply] }
     }
-    if (match.kind === 'one' && !asksInfo && !wantsToOrder) {
-      const p = match.product
-      conv.offer = p.id
-      return {
-        replies: [`A *${p.name}* sai por *${formatPrice(p.price)}* 😋${p.description ? `\n_${p.description}_` : ''}\n\n` +
-          'Quer que eu já anote uma pra você?'],
-      }
+    if (match.kind === 'one' && !asksInfo && !wantsToOrder) return { replies: [this.describeProduct(match.product, conv, n)] }
+
+    // Várias perguntas numa mensagem: "qual o horário e aceita pix?" responde as duas
+    const several = this.severalAnswers(tenant, n)
+    if (several) {
+      conv.lastKind = 'kb'
+      return { replies: [several], informative: true }
     }
 
     // Base de conhecimento: a pergunta cadastrada mais parecida
@@ -310,8 +401,8 @@ export class Engine {
     // Ingrediente citado ("quero azeitona", "tem com cebola?"): sugere o produto que leva
     const withIngredient = this.ingredientReply(products, conv, n)
     if (withIngredient) return { replies: [withIngredient] }
-    // "tem coxinha?": item que não está no catálogo (só quando a base não reconheceu o assunto)
-    if (!kb && match.kind === 'none') {
+    // "tem coxinha?": item que não está no catálogo (só quando a base não tem nem um assunto parecido)
+    if (!kb && match.kind === 'none' && !this.deps.knowledge?.candidates?.(tenant, n).length) {
       const notSold = this.notInCatalog(tenant, conv, n)
       if (notSold) return { replies: [notSold] }
     }
@@ -337,16 +428,67 @@ export class Engine {
     // Sem IA: responde com os dados cadastrados do negócio
     const info = this.infoAnswer(tenant, n, intents)
     if (info) return { replies: [info], informative: true }
+
+    // Quase entendeu: pergunta em vez de chutar ("Você quis dizer…?")
+    const options = missingTopic ? [] : this.deps.knowledge?.candidates?.(tenant, n) ?? []
+    if (options.length) {
+      conv.choice = { text: n, options: options.map(o => ({ key: o.key, title: o.title })) }
+      conv.lastKind = 'clarify'
+      const list = options.map((o, i) => `*${i + 1}* - ${o.title}`).join('\n')
+      return { replies: [`Não tenho certeza se entendi 🤔 Você quis dizer:\n\n${list}\n\nÉ só responder com o número (ou *não*, se for outra coisa).`] }
+    }
     return { missingTopic }
   }
 
   private knowledgeReply (tenant: TenantConfig, conv: Conversation, kb: Extract<KbResult, { status: 'answer' }>): Understood {
+    conv.lastKind = 'kb'
+    // Depois de apresentar a promoção, "quero essa" se refere ao combo cadastrado
+    if (kb.topic === 'promocoes') {
+      const promo = promoProduct(this.activeProducts(tenant))
+      if (promo) {
+        conv.lastProduct = promo.id
+        conv.offer = promo.id
+        return { replies: [`${kb.answer}\n\nQuer que eu já anote pra você? 😋`] }
+      }
+    }
     if (kb.action === 'catalog') {
       conv.state = 'catalog'
       return { replies: [kb.answer || this.pick(PHRASES.catalogIntro), this.catalogText(tenant, conv)] }
     }
     if (kb.action === 'human') return { replies: [kb.answer, this.handoff(tenant, conv)].filter(Boolean) }
     return { replies: [kb.answer], informative: true }
+  }
+
+  /** Divide a mensagem em perguntas e responde cada assunto diferente (só quando acha 2 ou mais). */
+  private severalAnswers (tenant: TenantConfig, n: string): string | undefined {
+    const kb = this.deps.knowledge
+    if (!kb) return undefined
+    const clauses = n.split(/\?|\s+e\s+(?=(?:qual|quais|como|onde|quando|quanto|que|tem|aceita|aceitam|faz|fazem|voces|vcs|entrega|entregam|abre|abrem|funciona)\b)|;/)
+      .map(c => c.trim()).filter(c => keywords(c).length >= 1)
+    if (clauses.length < 2) return undefined
+    const seen = new Set<string>()
+    const answers: string[] = []
+    for (const c of clauses) {
+      const r = kb.match(tenant, c)
+      if (r?.status !== 'answer' || r.action || seen.has(r.topic)) continue
+      seen.add(r.topic)
+      answers.push(r.answer)
+    }
+    return answers.length >= 2 ? answers.join('\n\n') : undefined
+  }
+
+  /** Preço e descrição de um produto (com os tamanhos, se houver) e a oferta de anotar. */
+  private describeProduct (p: Product, conv: Conversation, n: string): string {
+    conv.offer = p.id
+    conv.lastProduct = p.id
+    const size = matchSize(p, n)
+    const price = size
+      ? `*${p.name}* (${size.name}) sai por *${formatPrice(size.price)}*`
+      : p.sizes?.length
+        ? `*${p.name}*: ${p.sizes.map(s => `${s.name} *${formatPrice(s.price)}*`).join(' · ')}`
+        : `*${p.name}* sai por *${formatPrice(p.price)}*`
+    const extras = p.extras?.length ? `\nAdicionais: ${p.extras.map(e => `${e.name} (+${formatPrice(e.price)})`).join(', ')}` : ''
+    return `A ${price} 😋${p.description ? `\n_${p.description}_` : ''}${extras}\n\nQuer que eu já anote uma pra você?`
   }
 
   /** Responde horário, endereço, telefone, entrega, pagamento e o FAQ, sem IA. */
@@ -413,6 +555,7 @@ export class Engine {
     conv.humanSince = this.now().toISOString()
     conv.needsAgent = true
     conv.offer = undefined
+    conv.lastKind = 'handoff'
     return fill(tenant.messages.humanHandoff, tenant, conv, this.now())
   }
 
@@ -428,8 +571,10 @@ export class Engine {
       conv.state = 'menu'
       return 'Nosso catálogo ainda não está disponível por aqui. Se quiser, digite *atendente* que alguém da equipe te passa as opções.'
     }
+    if (conv.lastKind === 'other') conv.lastKind = 'catalog'
     const lines = products.map((p, i) =>
-      `*${i + 1}* - ${p.name} — ${formatPrice(p.price)}${p.description ? `\n      _${p.description}_` : ''}`)
+      `*${i + 1}* - ${p.name} — ${priceLabel(p)}${p.description ? `\n      _${p.description}_` : ''}` +
+      (p.extras?.length ? `\n      Adicionais: ${p.extras.map(e => `${e.name} +${formatPrice(e.price)}`).join(', ')}` : ''))
     return [
       '🛍️ *Catálogo*',
       '',
@@ -475,7 +620,7 @@ export class Engine {
     const products = this.activeProducts(tenant)
     if (!products.length) return this.catalogText(tenant, conv)
     conv.state = 'catalog'
-    const list = products.map((p, i) => `*${i + 1}* - ${p.name} — ${formatPrice(p.price)}`).join('\n')
+    const list = products.map((p, i) => `*${i + 1}* - ${p.name} — ${priceLabel(p)}`).join('\n')
     return `No momento temos estas opções:\n\n${list}\n\nQuer pedir alguma? É só mandar o número ou o nome. 😊`
   }
 
@@ -522,10 +667,134 @@ export class Engine {
       `*1 e ${Math.min(products.length, 4) || 2}* ou *2 ${a} e 1 ${b}*.`
   }
 
-  private addToCart (conv: Conversation, product: Product, qty: number): void {
-    const item = conv.cart.find(i => i.productId === product.id)
+  /**
+   * Coloca no carrinho já com o tamanho e os adicionais. Cada combinação é uma linha:
+   * "Pizza Calabresa (Grande) + Borda de catupiry".
+   */
+  private addToCart (conv: Conversation, product: Product, qty: number, size?: ProductOption, extras: ProductOption[] = []): string {
+    const key = [product.id, size?.name, ...extras.map(e => e.name)].filter(Boolean).join('|')
+    const name = `${product.name}${size ? ` (${size.name})` : ''}${extras.map(e => ` + ${e.name}`).join('')}`
+    const price = round2((size?.price ?? product.price) + extras.reduce((s, e) => s + e.price, 0))
+    const item = conv.cart.find(i => i.productId === key)
     if (item) item.qty += qty
-    else conv.cart.push({ productId: product.id, name: product.name, price: product.price, qty })
+    else conv.cart.push({ productId: key, name, price, qty })
+    conv.lastProduct = product.id
+    conv.lastKind = 'order'
+    return `${qty}x ${name}`
+  }
+
+  /**
+   * Adiciona um produto lendo tamanho e adicionais no texto ("calabresa grande com borda de catupiry").
+   * Se o produto tem tamanhos e o cliente não disse qual, guarda e retorna undefined (o bot pergunta).
+   */
+  private addProduct (conv: Conversation, product: Product, qty: number, text: string): string | undefined {
+    const extras = matchExtras(product, text)
+    if (product.sizes?.length) {
+      const size = matchSize(product, text)
+      if (!size) {
+        conv.pendingSize = [...(conv.pendingSize ?? []), { productId: product.id, qty, extras: extras.map(e => e.name) }]
+        conv.lastProduct = product.id
+        return undefined
+      }
+      return this.addToCart(conv, product, qty, size, extras)
+    }
+    return this.addToCart(conv, product, qty, undefined, extras)
+  }
+
+  private addedText (conv: Conversation, labels: string[]): string {
+    return `${this.pick(PHRASES.added)} ${labels.join(', ')}.\n\n${this.cartText(conv)}`
+  }
+
+  /** "Qual tamanho da Calabresa? 1 - Média … 2 - Grande …" (item ou meio a meio esperando o tamanho). */
+  private sizeQuestion (tenant: TenantConfig, conv: Conversation, prefix = ''): string {
+    const pending = conv.pendingSize?.[0]
+    if (!pending) return this.cartText(conv)
+    const { label, sizes } = this.pendingInfo(tenant, pending.productId)
+    const list = sizes.map((s, i) => `*${i + 1}* - ${s.name} — ${formatPrice(s.price)}`).join('\n')
+    return `${prefix}Qual tamanho ${pending.qty > 1 ? `das ${pending.qty} ` : 'da '}*${label}*?\n\n${list}`
+  }
+
+  /** Nome e tamanhos (com preço) de um item esperando tamanho — produto comum ou meio a meio. */
+  private pendingInfo (tenant: TenantConfig, productId: string): { label: string; sizes: ProductOption[] } {
+    const products = tenant.products
+    if (productId.startsWith('half:')) {
+      const [, a, b] = productId.split(':')
+      const pa = products.find(p => p.id === a)!
+      const pb = products.find(p => p.id === b)!
+      const sizes = (pa.sizes ?? []).map(s => ({ name: s.name, price: halfPrice(tenant, pa, pb, s.name) }))
+      return { label: `meio a meio ${shortName(pa, products)} / ${shortName(pb, products)}`, sizes }
+    }
+    const p = products.find(x => x.id === productId)!
+    return { label: p.name, sizes: p.sizes ?? [] }
+  }
+
+  /** Resposta ao "Qual tamanho?": número ou nome do tamanho. Sem relação com a pergunta: deixa o fluxo seguir. */
+  private resolvePendingSize (tenant: TenantConfig, conv: Conversation, bare: string): string | undefined {
+    const pending = conv.pendingSize![0]
+    const { sizes } = this.pendingInfo(tenant, pending.productId)
+    const byNumber = /^\d$/.test(bare) ? sizes[Number(bare) - 1] : undefined
+    const size = byNumber ?? matchSize({ sizes } as Product, bare)
+    if (!size) {
+      conv.pendingSize = undefined // mudou de assunto
+      return undefined
+    }
+    conv.pendingSize!.shift()
+    let label: string
+    if (pending.productId.startsWith('half:')) {
+      label = this.addHalf(tenant, conv, pending.productId, pending.qty, size.name)
+    } else {
+      const product = tenant.products.find(p => p.id === pending.productId)!
+      const extras = (product.extras ?? []).filter(e => pending.extras.includes(e.name))
+      label = this.addToCart(conv, product, pending.qty, (product.sizes ?? []).find(s => s.name === size.name), extras)
+    }
+    conv.state = 'catalog'
+    if (conv.pendingSize?.length) return this.sizeQuestion(tenant, conv, `${this.pick(PHRASES.added)} ${label}.\n\n`)
+    conv.pendingSize = undefined
+    return this.addedText(conv, [label])
+  }
+
+  /** Pizza meio a meio no carrinho, com o preço pela regra do cliente (sabor mais caro ou média). */
+  private addHalf (tenant: TenantConfig, conv: Conversation, halfId: string, qty: number, sizeName?: string): string {
+    const [, a, b] = halfId.split(':')
+    const pa = tenant.products.find(p => p.id === a)!
+    const pb = tenant.products.find(p => p.id === b)!
+    const name = `Meio a meio: ${shortName(pa, tenant.products)} / ${shortName(pb, tenant.products)}${sizeName ? ` (${sizeName})` : ''}`
+    const key = `half|${a}|${b}|${sizeName ?? ''}`
+    const price = halfPrice(tenant, pa, pb, sizeName)
+    const item = conv.cart.find(i => i.productId === key)
+    if (item) item.qty += qty
+    else conv.cart.push({ productId: key, name, price, qty })
+    conv.lastKind = 'order'
+    return `${qty}x ${name}`
+  }
+
+  /** "meio calabresa meio margherita", "metade 4 queijos e metade calabresa". Undefined se não for meio a meio. */
+  private tryHalfHalf (tenant: TenantConfig, conv: Conversation, n: string): string | undefined {
+    if (!HALF_RE.test(n)) return undefined
+    const products = this.activeProducts(tenant)
+    const found: Product[] = []
+    for (const seg of n.split(/\b(?:meio a meio|metade|meia|meio|com|e)\b|\//)) {
+      const m = findProduct(products, seg)
+      if (m.kind === 'one' && !found.includes(m.product)) found.push(m.product)
+    }
+    if (found.length !== 2) return undefined
+    if (tenant.halfHalf === 'off') return 'Não fazemos pizza meio a meio 😕 Mas pode pedir as duas inteiras, se quiser!'
+    const [pa, pb] = found
+    const head = n.split(HALF_RE)[0]
+    const qty = /\d|\b(uma|duas|tres)\b/.test(head) ? clampQty(parseQuantity(head)) : 1
+    const halfId = `half:${pa.id}:${pb.id}`
+    if (pa.sizes?.length) {
+      const size = matchSize(pa, n)
+      if (!size) {
+        conv.pendingSize = [...(conv.pendingSize ?? []), { productId: halfId, qty, extras: [] }]
+        conv.state = 'catalog'
+        return this.sizeQuestion(tenant, conv)
+      }
+      conv.state = 'catalog'
+      return this.addedText(conv, [this.addHalf(tenant, conv, halfId, qty, size.name)])
+    }
+    conv.state = 'catalog'
+    return this.addedText(conv, [this.addHalf(tenant, conv, halfId, qty)])
   }
 
   /**
@@ -540,47 +809,69 @@ export class Engine {
     const invalid: string[] = []
     let last: Product | undefined
 
+    // Meio a meio ("meio calabresa meio margherita"); sem regra cadastrada, quem responde é a base de conhecimento
+    if (HALF_RE.test(n)) {
+      if (!tenant.halfHalf) return undefined
+      const half = this.tryHalfHalf(tenant, conv, n)
+      if (half) return half
+    }
+
     // "uma de cada" / "duas de cada": todos os itens do grupo principal (ex.: as pizzas)
     const each = new RegExp(`\\b(${QTY_WORD})\\s+de\\s+cada\\b`).exec(n)
     if (each && products.length > 0) {
       const qty = parseQuantity(each[1])
       for (const p of mainGroup(products)) {
-        this.addToCart(conv, p, qty)
-        added.push(`${qty}x ${p.name}`)
+        const label = this.addProduct(conv, p, qty, n)
+        if (label) added.push(label)
       }
       conv.state = 'catalog'
-      return `${this.pick(PHRASES.added)} ${added.join(', ')}.\n\n${this.cartText(conv)}`
+      return this.finishAdding(tenant, conv, added)
     }
+
+    // Palavras de adicionais ("borda de catupiry") não podem atrapalhar a escolha do produto
+    const extraWords = new Set(products.flatMap(p => (p.extras ?? []).flatMap(e => keywords(normalize(e.name)))))
 
     for (const chunk of byNumber ? orderChunks(n) : splitItems(n)) {
       const numbered = byNumber ? numberedItem(chunk) : undefined
       if (numbered) {
         const product = products[numbered.index - 1]
         if (!product) { invalid.push(String(numbered.index)); continue }
-        this.addToCart(conv, product, numbered.qty)
-        added.push(`${numbered.qty}x ${product.name}`)
+        const label = this.addProduct(conv, product, numbered.qty, chunk)
+        if (label) added.push(label)
         last = product
         continue
       }
-      const match = findProduct(products, chunk)
+      const cleaned = keywords(chunk).filter(w => !extraWords.has(w)).join(' ')
+      let match = findProduct(products, cleaned || chunk)
+      if (match.kind === 'none') match = findProduct(products, chunk)
+      // Número + tamanho/adicional com o catálogo na tela: "2 grande", "1 com borda"
+      if (match.kind === 'none' && byNumber) {
+        const m = /(?:^|\s)(\d{1,2})\s+(.+)$/.exec(chunk)
+        const product = m ? products[Number(m[1]) - 1] : undefined
+        if (product && (matchSize(product, m![2]) || matchExtras(product, m![2]).length)) {
+          const label = this.addProduct(conv, product, 1, m![2])
+          if (label) added.push(label)
+          last = product
+          continue
+        }
+      }
       if (match.kind === 'many') { ambiguous.push(match.products); continue }
       if (match.kind !== 'one') continue
       const explicitQty = /\d|\b(um|uma|dois|duas|tres|quatro|cinco|seis|sete|oito|nove|dez)\b/.test(chunk)
       // "frango e catupiry" é um produto só: não adiciona de novo o mesmo item sem quantidade
       if (match.product === last && !explicitQty) continue
-      const qty = parseQuantity(chunk)
-      this.addToCart(conv, match.product, qty)
-      added.push(`${qty}x ${match.product.name}`)
+      const label = this.addProduct(conv, match.product, parseQuantity(chunk), chunk)
+      if (label) added.push(label)
       last = match.product
     }
 
     const notFound = invalid.length
       ? `Não achei o item *${invalid.join('*, *')}* na lista (vai de 1 a ${products.length}).`
       : ''
-    if (added.length > 0) {
+    if (added.length > 0 || conv.pendingSize?.length) {
       conv.state = 'catalog'
       const doubt = ambiguous.length ? `\n\nSó não entendi qual destes você quer: ${this.listOptions(ambiguous[0], products)}` : ''
-      return `${this.pick(PHRASES.added)} ${added.join(', ')}.${notFound ? `\n${notFound}` : ''}${doubt}\n\n${this.cartText(conv)}`
+      return this.finishAdding(tenant, conv, added, `${notFound ? `\n${notFound}` : ''}${doubt}`)
     }
     if (notFound) return `Hmm, ${notFound.charAt(0).toLowerCase()}${notFound.slice(1)} Pode conferir o número? 😊`
     if (ambiguous.length > 0) {
@@ -590,8 +881,17 @@ export class Engine {
     return undefined
   }
 
+  /** Resposta depois de adicionar: o que entrou e, se faltar tamanho de algum item, a pergunta do tamanho. */
+  private finishAdding (tenant: TenantConfig, conv: Conversation, added: string[], note = ''): string {
+    if (conv.pendingSize?.length) {
+      const prefix = added.length ? `${this.pick(PHRASES.added)} ${added.join(', ')}.${note}\n\n` : note ? `${note.trim()}\n\n` : ''
+      return this.sizeQuestion(tenant, conv, prefix)
+    }
+    return `${this.pick(PHRASES.added)} ${added.join(', ')}.${note}\n\n${this.cartText(conv)}`
+  }
+
   private listOptions (options: Product[], all: Product[]): string {
-    return '\n' + options.map(p => `*${all.indexOf(p) + 1}* - ${p.name} — ${formatPrice(p.price)}`).join('\n')
+    return '\n' + options.map(p => `*${all.indexOf(p) + 1}* - ${p.name} — ${priceLabel(p)}`).join('\n')
   }
 
   private cartText (conv: Conversation): string {
@@ -667,6 +967,57 @@ function mainGroup (products: Product[]): Product[] {
   }
   const [word, n] = [...count.entries()].sort((a, b) => b[1] - a[1])[0] ?? ['', 0]
   return n >= 2 ? products.filter(p => normalize(p.name).split(' ')[0] === word) : products
+}
+
+const round2 = (v: number) => Math.round(v * 100) / 100
+
+/** "R$ 49,90" ou, com tamanhos, "Média R$ 49,90 · Grande R$ 59,90". */
+function priceLabel (p: Product): string {
+  return p.sizes?.length ? p.sizes.map(s => `${s.name} ${formatPrice(s.price)}`).join(' · ') : formatPrice(p.price)
+}
+
+const SIZE_ALIASES: Record<string, string> = { g: 'grande', gde: 'grande', grd: 'grande', m: 'media', med: 'media', p: 'pequena', peq: 'pequena', fam: 'familia' }
+
+/** Tamanho citado no texto ("grande", "a média", "G", "a maior"). */
+function matchSize (p: Pick<Product, 'sizes'>, text: string): ProductOption | undefined {
+  const sizes = p.sizes ?? []
+  if (!sizes.length) return undefined
+  const tokens = normalize(text).replace(/[^a-z0-9 ]/g, ' ').split(/\s+/).map(t => SIZE_ALIASES[t] ?? t)
+  const found = sizes.find(s => normalize(s.name).split(/\s+/).some(w => tokens.some(t => t === w || (t.length >= 4 && similar(t, w)))))
+  if (found) return found
+  if (tokens.includes('maior')) return [...sizes].sort((a, b) => b.price - a.price)[0]
+  if (tokens.includes('menor')) return [...sizes].sort((a, b) => a.price - b.price)[0]
+  return undefined
+}
+
+/** Adicionais citados ("com borda de catupiry", "com bacon"): todas as palavras do adicional aparecem no texto. */
+function matchExtras (p: Product, text: string): ProductOption[] {
+  const words = keywords(normalize(text))
+  return (p.extras ?? []).filter(e => {
+    const need = keywords(normalize(e.name))
+    return need.length > 0 && need.every(w => words.some(t => similar(t, w)))
+  })
+}
+
+/** Preço do meio a meio pela regra do cliente: o sabor mais caro (padrão) ou a média dos dois. */
+function halfPrice (tenant: TenantConfig, a: Product, b: Product, sizeName?: string): number {
+  const price = (p: Product) => p.sizes?.find(s => s.name === sizeName)?.price ?? p.price
+  return tenant.halfHalf === 'avg' ? round2((price(a) + price(b)) / 2) : Math.max(price(a), price(b))
+}
+
+/** Produto que representa a promoção (nome ou descrição com "promoção"/"combo"). */
+function promoProduct (products: Product[]): Product | undefined {
+  return products.find(p => PROMO_RE.test(normalize(`${p.name} ${p.description ?? ''}`)))
+}
+
+/** Troca as palavras do cliente pelos termos do cardápio ("coca" -> "refrigerante"). */
+function applySynonyms (tenant: TenantConfig, n: string): string {
+  let out = n
+  for (const [from, to] of Object.entries(tenant.synonyms ?? {})) {
+    const f = normalize(from).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    if (f) out = out.replace(new RegExp(`(^|[^a-z0-9])${f}(?=$|[^a-z0-9])`, 'g'), `$1${normalize(to)}`)
+  }
+  return out
 }
 
 /** A última mensagem do bot foi o catálogo? (evita mandar a lista de novo) */

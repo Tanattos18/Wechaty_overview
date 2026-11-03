@@ -6,7 +6,9 @@ import QRCode from 'qrcode'
 import type { BotManager } from '../channels/whatsapp.js'
 import type { Engine } from '../engine/engine.js'
 import { BUILTIN_VARIABLES, tenantKnowledge, type KnowledgeBase } from '../knowledge/kb.js'
-import { isValidTenantId, type Store } from '../store.js'
+import { exportConversations, qualityStats, runQa, runSavedTests } from '../quality/quality.js'
+import { replay } from '../quality/replay.js'
+import { isValidTenantId, type SavedTest, type Store } from '../store.js'
 import { newTenant, sanitizeTenant } from '../tenant-template.js'
 import {
   ADJUSTMENT_STATUSES, DEFAULT_PLAN, ORDER_STATUSES,
@@ -224,7 +226,11 @@ export function createPanel (deps: PanelDeps) {
         updated.business = sanitized.business
         updated.knowledge = { ...(tenant.knowledge ?? sanitized.knowledge!), variables: sanitized.knowledge!.variables }
       }
-      if (can.products) updated.products = sanitized.products
+      if (can.products) {
+        updated.products = sanitized.products
+        updated.halfHalf = sanitized.halfHalf
+        updated.synonyms = sanitized.synonyms
+      }
     }
     const newPassword = String(req.body?.newPassword ?? '')
     if (newPassword) {
@@ -483,6 +489,114 @@ export function createPanel (deps: PanelDeps) {
     const quickReplies = list.filter((q: unknown) => typeof q === 'string' && q.trim()).map((q: string) => q.trim().slice(0, 500)).slice(0, 20)
     store.saveTenant({ ...tenant, quickReplies })
     res.json({ quickReplies })
+  })
+
+  // ---------- treinar o bot ----------
+
+  /** 👎 numa resposta do bot: marca como errada e manda a pergunta do cliente para a fila "Treinar". */
+  app.post('/api/tenants/:tenantId/conversations/:chatId/feedback', auth.required, (req, res) => {
+    const found = findConv(req, res)
+    if (!found) return
+    const i = found.conv.messages.findIndex(m => m.from === 'bot' && m.at === req.body?.at)
+    if (i < 0) { res.status(404).json({ error: 'Mensagem não encontrada.' }); return }
+    const msg = found.conv.messages[i]
+    const bad = msg.feedback !== 'bad'
+    msg.feedback = bad ? 'bad' : undefined
+    const asked = found.conv.messages.slice(0, i).reverse().find(m => m.from === 'customer')
+    if (bad && asked) deps.knowledge.logUnanswered(found.tenant.id, asked.text, 'resposta-errada')
+    store.saveConversations(found.tenant.id)
+    res.json({ feedback: msg.feedback ?? null })
+  })
+
+  /**
+   * Ensina uma forma de perguntar para um assunto: só para este cliente ou,
+   * se o Super Admin marcar, para todos os clientes (grava no pacote).
+   */
+  app.post('/api/tenants/:tenantId/knowledge/train', auth.required, (req, res) => {
+    const tenant = tenantOr404(req, res)
+    if (!tenant) return
+    const session = res.locals.session as Session
+    const text = String(req.body?.text ?? '').trim()
+    const key = String(req.body?.key ?? '')
+    if (text.length < 2) { res.status(400).json({ error: 'Frase vazia.' }); return }
+    if (!deps.knowledge.answerFor(tenant, key)) { res.status(400).json({ error: 'Assunto não encontrado.' }); return }
+    const global = req.body?.global === true && session.role === 'admin'
+    if (global) deps.knowledge.addPackQuestion(key, text)
+    else engine.learn(tenant, key, text)
+    if (req.body?.unansweredId) deps.knowledge.deleteUnanswered(tenant.id, Number(req.body.unansweredId))
+    res.json({ ok: true, global })
+  })
+
+  // ---------- qualidade, bateria de testes e exportação ----------
+
+  app.get('/api/tenants/:tenantId/quality', auth.required, (req, res) => {
+    const tenant = tenantOr404(req, res)
+    if (tenant) res.json(qualityStats(store, deps.knowledge, tenant))
+  })
+
+  app.post('/api/tenants/:tenantId/qa', auth.required, async (req, res) => {
+    const tenant = tenantOr404(req, res)
+    if (tenant) res.json(await runQa(deps.knowledge, tenant))
+  })
+
+  app.get('/api/tenants/:tenantId/conversations-export', auth.required, (req, res) => {
+    const tenant = tenantOr404(req, res)
+    if (!tenant) return
+    const format = req.query.format === 'json' ? 'json' : 'txt'
+    const days = Math.min(365, Math.max(1, Number(req.query.days) || 30))
+    const date = new Date().toISOString().slice(0, 10)
+    res.setHeader('Content-Disposition', `attachment; filename="conversas-${tenant.id}-${date}.${format}"`)
+    res.type(format === 'json' ? 'application/json' : 'text/plain; charset=utf-8')
+      .send(exportConversations(store, tenant, format, days))
+  })
+
+  // ---------- conversas salvas como teste ----------
+
+  app.get('/api/tenants/:tenantId/tests', auth.required, (req, res) => {
+    const tenant = tenantOr404(req, res)
+    if (tenant) res.json(store.listTests(tenant.id))
+  })
+
+  /** Guarda a conversa como teste: as mensagens do cliente e as respostas que o bot dá hoje. */
+  app.post('/api/tenants/:tenantId/conversations/:chatId/save-test', auth.required, async (req, res) => {
+    const found = findConv(req, res)
+    if (!found) return
+    const messages = found.conv.messages.filter(m => m.from === 'customer').map(m => m.text).slice(-40)
+    if (!messages.length) { res.status(400).json({ error: 'A conversa não tem mensagens do cliente.' }); return }
+    const expected = await replay(found.tenant, deps.knowledge, messages)
+    const test: SavedTest = {
+      id: crypto.randomBytes(5).toString('hex'),
+      title: String(req.body?.title ?? '').trim().slice(0, 80) || `Conversa com ${found.conv.name || 'cliente'}`,
+      messages,
+      expected,
+      createdAt: new Date().toISOString(),
+    }
+    store.saveTests(found.tenant.id, [...store.listTests(found.tenant.id), test])
+    res.status(201).json(test)
+  })
+
+  app.post('/api/tenants/:tenantId/tests/run', auth.required, async (req, res) => {
+    const tenant = tenantOr404(req, res)
+    if (tenant) res.json(await runSavedTests(deps.knowledge, tenant, store.listTests(tenant.id)))
+  })
+
+  /** A resposta nova está certa (mudança de propósito): passa a ser a esperada. */
+  app.post('/api/tenants/:tenantId/tests/:id/accept', auth.required, async (req, res) => {
+    const tenant = tenantOr404(req, res)
+    if (!tenant) return
+    const list = store.listTests(tenant.id)
+    const test = list.find(t => t.id === req.params.id)
+    if (!test) { res.status(404).json({ error: 'Teste não encontrado.' }); return }
+    test.expected = await replay(tenant, deps.knowledge, test.messages)
+    store.saveTests(tenant.id, list)
+    res.json(test)
+  })
+
+  app.delete('/api/tenants/:tenantId/tests/:id', auth.required, (req, res) => {
+    const tenant = tenantOr404(req, res)
+    if (!tenant) return
+    store.saveTests(tenant.id, store.listTests(tenant.id).filter(t => t.id !== req.params.id))
+    res.json({ ok: true })
   })
 
   // ---------- pedidos de ajuste ----------

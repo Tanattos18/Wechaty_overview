@@ -68,6 +68,13 @@
       "price": 12,
       "description": "",
       "active": true
+    },
+    {
+      "id": "p5",
+      "name": "Combo Promoção de Terça",
+      "price": 59.9,
+      "description": "Pizza grande (qualquer sabor) + refrigerante 2L",
+      "active": true
     }
   ],
   "ai": {
@@ -107,5 +114,16 @@
       "sobremesas": "Pizza doce de chocolate ou banana com canela (consulte o atendente)."
     }
   },
-  "style": "human"
+  "style": "human",
+  "halfHalf": "max",
+  "synonyms": {
+    "coca": "refrigerante",
+    "coca cola": "refrigerante",
+    "refri": "refrigerante",
+    "guarana": "refrigerante",
+    "4 queijos": "quatro queijos",
+    "marguerita": "margherita",
+    "margarita": "margherita",
+    "calabreza": "calabresa"
+  }
 }

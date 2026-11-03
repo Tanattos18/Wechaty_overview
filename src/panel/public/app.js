@@ -7,6 +7,7 @@ const TABS = {
   home: 'Início',
   clients: 'Clientes',
   requests: 'Pedidos de ajuste',
+  quality: 'Qualidade do atendimento',
   connection: 'Conexão com WhatsApp',
   chats: 'Conversas',
   orders: 'Pedidos',
@@ -62,6 +63,10 @@ const ICONS = {
   arrowRight: '<path d="M5 12h14M13 6l6 6-6 6"/>',
   more: '<circle cx="5" cy="12" r="1.2"/><circle cx="12" cy="12" r="1.2"/><circle cx="19" cy="12" r="1.2"/>',
   edit: '<path d="M4 20h4L19 9l-4-4L4 16z"/><path d="m13.5 6.5 4 4"/>',
+  chart: '<path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/>',
+  thumbDown: '<path d="M10 15v4a3 3 0 0 0 3 3l4-9V2H5.7a2 2 0 0 0-2 1.7l-1.4 9A2 2 0 0 0 4.3 15z"/><path d="M17 2h3a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2h-3"/>',
+  download: '<path d="M12 3v12M7 10l5 5 5-5M5 21h14"/>',
+  save: '<path d="M5 3h11l3 3v15H5z"/><path d="M8 3v6h8V3M8 21v-7h8v7"/>',
 }
 const icon = (name, size = 20) =>
   `<svg class="ico" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[name] ?? ''}</svg>`
@@ -385,7 +390,7 @@ function openTab (tab) {
   void view.offsetWidth // reinicia a animação de entrada
   view.classList.add('enter')
   const render = {
-    home: renderHome, clients: renderClients, requests: renderRequests, connection: renderConnection, chats: renderChats,
+    home: renderHome, clients: renderClients, requests: renderRequests, quality: renderQuality, connection: renderConnection, chats: renderChats,
     orders: renderOrders, knowledge: renderKnowledge, config: isAdmin() ? renderConfig : renderClientConfig, simulator: renderSimulator,
   }[tab]
   render().catch(err => { view.innerHTML = `<div class="card error">${esc(err.message)}</div>` })
@@ -625,19 +630,22 @@ function dayLabel (iso) {
   return d.toLocaleDateString('pt-BR', { day: '2-digit', month: 'long' })
 }
 
-function bubble (m) {
+function bubble (m, rate = false) {
   const who = m.from === 'bot' ? `<span class="who">${icon('bot', 13)} Bot</span>` : m.from === 'agent' ? '<span class="who agent">Atendente</span>' : ''
-  return `<div class="bubble ${m.from}">${who}<div class="txt">${waFormat(m.text)}</div><span class="t">${hour(m.at)}${m.from !== 'customer' ? ' <span class="ticks">✓✓</span>' : ''}</span></div>`
+  const fb = rate && m.from === 'bot'
+    ? `<button class="fb ${m.feedback === 'bad' ? 'on' : ''}" data-at="${esc(m.at)}" title="${m.feedback === 'bad' ? 'Marcada como errada (clique para desfazer)' : 'Resposta errada? Marque para treinar o bot'}" aria-label="Marcar resposta errada">${icon('thumbDown', 14)}</button>`
+    : ''
+  return `<div class="bubble ${m.from}${m.feedback === 'bad' ? ' bad' : ''}">${fb}${who}<div class="txt">${waFormat(m.text)}</div><span class="t">${hour(m.at)}${m.from !== 'customer' ? ' <span class="ticks">✓✓</span>' : ''}</span></div>`
 }
 const messageHtml = bubble
 
-function messagesHtml (msgs) {
+function messagesHtml (msgs, rate = false) {
   let last = ''
   return msgs.map(m => {
     const label = dayLabel(m.at)
     const sep = label !== last ? `<div class="day-sep"><span>${label}</span></div>` : ''
     last = label
-    return sep + bubble(m)
+    return sep + bubble(m, rate)
   }).join('')
 }
 
@@ -659,6 +667,9 @@ async function renderChats () {
       <div class="card chat-side">
         <div class="chat-tools">
           <label class="search">${icon('search', 18)}<input id="chat-search" placeholder="Buscar conversa" value="${esc(state.chatSearch)}" autocomplete="off"></label>
+          <div class="row" style="gap:.4rem">
+            <a class="btn small ghost" href="${tenantUrl('/conversations-export?format=txt&days=30')}">${icon('download', 16)} Exportar conversas</a>
+          </div>
           <div class="chips" id="chat-filters">${Object.entries(CHAT_FILTERS).map(([k, l]) =>
             `<button class="chip ${state.chatFilter === k ? 'on' : ''}" data-filter="${k}">${l}</button>`).join('')}</div>
         </div>
@@ -717,11 +728,12 @@ async function renderChats () {
         ${avatar(c.name || c.chatId, 40)}
         <div class="ch-info"><strong>${esc(c.name || c.chatId)}</strong>
           <span class="muted">${human ? 'Atendimento humano — o bot está pausado' : 'Bot respondendo'}${c.cart.length ? ` · 🛒 ${c.cart.map(i => `${i.qty}x ${esc(i.name)}`).join(', ')}` : ''}</span></div>
+        <button class="btn icon-btn ghost" id="save-test" title="Salvar como teste (garante que esta conversa continue funcionando)" aria-label="Salvar como teste">${icon('save', 18)}</button>
         ${human
           ? '<button class="btn small" id="release">Devolver ao bot</button>'
           : '<button class="btn small primary" id="takeover">Assumir conversa</button>'}
       </div>
-      <div class="messages wa-bg" id="messages">${messagesHtml(c.messages)}</div>
+      <div class="messages wa-bg" id="messages">${messagesHtml(c.messages, true)}</div>
       <div class="quick">
         ${quickReplies().map((q, i) => `<button class="chip" data-quick="${i}" title="${esc(q)}">${esc(q.length > 34 ? q.slice(0, 32) + '…' : q)}</button>`).join('')}
         <button class="chip ghost" id="edit-quick">${icon('edit', 14)} Editar</button>
@@ -741,6 +753,21 @@ async function renderChats () {
       b.onclick = () => { input.value = quickReplies()[Number(b.dataset.quick)]; input.focus() }
     }
     $('#edit-quick', panel).onclick = editQuickReplies
+    for (const b of panel.querySelectorAll('.fb')) {
+      b.onclick = async () => {
+        const r = await api('POST', tenantUrl(`/conversations/${encodeURIComponent(state.chatId)}/feedback`), { at: b.dataset.at })
+        toast(r.feedback ? 'Marcada como errada. A pergunta foi para “Treinar o bot” (aba Conhecimento).' : 'Marcação desfeita.')
+        refreshChat()
+      }
+    }
+    $('#save-test', panel).onclick = async () => {
+      const title = prompt('Nome do teste (ex.: Pedido com meio a meio):', `Conversa com ${c.name || 'cliente'}`)
+      if (title === null) return
+      try {
+        await api('POST', tenantUrl(`/conversations/${encodeURIComponent(state.chatId)}/save-test`), { title })
+        toast('Conversa salva como teste. Rode os testes na aba Qualidade.')
+      } catch (err) { toast(err.message, 'error') }
+    }
     $('#composer', panel).onsubmit = async e => {
       e.preventDefault()
       const text = input.value.trim()
@@ -943,6 +970,8 @@ function menuRow (o = { key: '', label: '', type: 'text', text: '' }) {
     </div>`
 }
 
+const optionsText = list => (list ?? []).map(o => `${o.name}=${String(o.price).replace('.', ',')}`).join('; ')
+
 function productRow (p = { id: '', name: '', price: '', description: '', active: true }) {
   return `
     <div class="edit-row product product-row" data-id="${esc(p.id)}">
@@ -951,7 +980,34 @@ function productRow (p = { id: '', name: '', price: '', description: '', active:
       <input name="description" value="${esc(p.description ?? '')}" placeholder="Descrição (opcional)" aria-label="Descrição">
       <label class="check"><input name="active" type="checkbox" ${p.active ? 'checked' : ''}> Ativo</label>
       <button type="button" class="btn small danger remove" aria-label="Remover">✕</button>
+      <input name="sizes" class="opt-sizes" value="${esc(optionsText(p.sizes))}" placeholder="Tamanhos (opcional): Média=49,90; Grande=59,90" aria-label="Tamanhos e preços">
+      <input name="extras" class="opt-extras" value="${esc(optionsText(p.extras))}" placeholder="Adicionais (opcional): Borda de catupiry=9; Bacon=6" aria-label="Adicionais e preços">
     </div>`
+}
+
+const productFromRow = r => ({
+  id: r.dataset.id, name: $('[name=name]', r).value, price: $('[name=price]', r).value,
+  description: $('[name=description]', r).value, active: $('[name=active]', r).checked,
+  sizes: $('[name=sizes]', r).value, extras: $('[name=extras]', r).value,
+})
+
+/** Meio a meio e sinônimos (ficam junto do cardápio). */
+function catalogRulesHtml (c) {
+  const syn = Object.entries(c.synonyms ?? {}).map(([a, b]) => `${a}=${b}`).join('\n')
+  return `<div class="grid2">
+    <label>Pizza meio a meio
+      <select name="halfHalf">
+        <option value="" ${!c.halfHalf ? 'selected' : ''}>Não montar (só responder dúvidas)</option>
+        <option value="max" ${c.halfHalf === 'max' ? 'selected' : ''}>Cobrar pelo sabor mais caro</option>
+        <option value="avg" ${c.halfHalf === 'avg' ? 'selected' : ''}>Cobrar a média dos dois sabores</option>
+        <option value="off" ${c.halfHalf === 'off' ? 'selected' : ''}>Não fazemos meio a meio</option>
+      </select>
+      <span class="muted" style="font-weight:400">O bot entende “meio calabresa meio 4 queijos” e calcula o preço.</span>
+    </label>
+    <label>Sinônimos (um por linha: como o cliente fala = nome no cardápio)
+      <textarea name="synonyms" rows="4" placeholder="coca=refrigerante&#10;4 queijos=quatro queijos&#10;marguerita=margherita">${esc(syn)}</textarea>
+    </label>
+  </div>`
 }
 
 async function renderConfig () {
@@ -981,8 +1037,10 @@ async function renderConfig () {
 
       <section class="card stack">
         <h3>Catálogo</h3>
+        <p class="muted">Tamanhos e adicionais são opcionais. Com tamanhos, o bot pergunta qual o cliente quer. Para a promoção virar item que dá para pedir, cadastre um produto com “Promoção” ou “Combo” no nome.</p>
         <div id="product-rows">${c.products.map(productRow).join('')}</div>
         <div><button type="button" class="btn small" id="add-product">+ Adicionar produto</button></div>
+        ${catalogRulesHtml(c)}
       </section>
 
       <section class="card stack">
@@ -1043,10 +1101,9 @@ async function renderConfig () {
         key: $('[name=key]', r).value, label: $('[name=label]', r).value,
         type: $('[name=type]', r).value, text: $('[name=text]', r).value,
       })),
-      products: [...form.querySelectorAll('.product-row')].map(r => ({
-        id: r.dataset.id, name: $('[name=name]', r).value, price: $('[name=price]', r).value,
-        description: $('[name=description]', r).value, active: $('[name=active]', r).checked,
-      })),
+      products: [...form.querySelectorAll('.product-row')].map(productFromRow),
+      halfHalf: v('halfHalf').value,
+      synonyms: v('synonyms').value,
       ai: { enabled: v('ai.enabled').checked, instructions: v('ai.instructions').value },
       messages: Object.fromEntries(['welcome', 'fallback', 'humanHandoff', 'humanBack', 'orderConfirmed', 'nonText']
         .map(k => [k, v(`messages.${k}`).value])),
@@ -1062,6 +1119,107 @@ async function renderConfig () {
   }
 }
 
+
+// ---------- Qualidade do atendimento ----------
+
+async function renderQuality () {
+  const [q, tests] = await Promise.all([api('GET', tenantUrl('/quality')), api('GET', tenantUrl('/tests'))])
+  const tone = q.understoodPct >= 85 ? 'good' : q.answered ? 'warn' : ''
+  view.innerHTML = `
+    <div class="home">
+      <section class="stack">
+        <div class="section-head"><h2>Últimos 7 dias</h2>
+          <span class="row" style="gap:.4rem">
+            <a class="btn small" href="${tenantUrl('/conversations-export?format=txt&days=30')}">${icon('download', 16)} Exportar conversas (.txt)</a>
+            <a class="btn small ghost" href="${tenantUrl('/conversations-export?format=json&days=30')}">.json</a>
+          </span></div>
+        <div class="stats">
+          ${statTile({ label: 'Entendimento', value: q.answered ? `${q.understoodPct}%` : '—', sub: `${q.answered} respostas do bot`, iconName: q.understoodPct >= 85 ? 'check' : 'chart', tone })}
+          ${statTile({ label: 'Não entendidas', value: q.notUnderstood, sub: 'o bot pediu para explicar de outro jeito', iconName: 'alert', tone: q.notUnderstood ? 'warn' : '' })}
+          ${statTile({ label: 'Atendente chamado', value: q.handoffs, sub: `${q.clarified} vez(es) o bot perguntou “você quis dizer…?”`, iconName: 'users' })}
+          ${statTile({ label: 'Marcadas como erradas', value: q.markedWrong, sub: 'pelo 👎 nas Conversas', iconName: 'thumbDown', tab: 'knowledge', tone: q.markedWrong ? 'warn' : '' })}
+        </div>
+        <div class="charts">
+          ${barChart({ id: 'chart-quality', title: 'Mensagens entendidas por dia (%)', days: q.days, key: 'pct', unit: '%' })}
+          <div class="card stack">
+            <h3>O que mais falhou</h3>
+            ${q.unanswered.length
+              ? `<ol class="fail-list">${q.unanswered.map(u => `<li><span>“${esc(u.text)}”</span><span class="muted">${u.count}x</span></li>`).join('')}</ol>
+                 <button class="btn small" data-goto="knowledge">Treinar o bot ${icon('arrowRight', 16)}</button>`
+              : '<p class="muted">Nada falhando por enquanto. 🎉</p>'}
+          </div>
+        </div>
+      </section>
+
+      <section class="card stack">
+        <div class="section-head"><h3>Bateria de testes</h3><button class="btn primary small" id="qa-run">${icon('flask', 16)} Rodar bateria</button></div>
+        <p class="muted">Testa frases típicas do ramo e os fluxos básicos (saudação, cardápio, pedido, atendente) com a configuração deste cliente, sem afetar as conversas reais. Use antes de entregar o bot e depois de cada ajuste.</p>
+        <div id="qa-result"></div>
+      </section>
+
+      <section class="card stack">
+        <div class="section-head"><h3>Conversas salvas como teste <span class="muted">(${tests.length})</span></h3>
+          ${tests.length ? `<button class="btn small" id="tests-run">${icon('check', 16)} Rodar todos</button>` : ''}</div>
+        <p class="muted">Na aba Conversas, use o botão ${icon('save', 14)} para guardar uma conversa. Aqui você confere se ela continua sendo respondida do mesmo jeito depois de cada mudança.</p>
+        <div id="tests-list">${tests.length ? tests.map(t => `
+          <div class="test-item" data-id="${esc(t.id)}">
+            <div><strong>${esc(t.title)}</strong> <span class="muted">· ${t.messages.length} mensagem(ns) · ${time(t.createdAt)}</span></div>
+            <div class="test-result"></div>
+            <div class="row"><button class="btn small ghost test-del">Excluir</button></div>
+          </div>`).join('') : '<p class="muted">Nenhuma conversa salva ainda.</p>'}</div>
+      </section>
+    </div>`
+  wireCharts()
+
+  $('#qa-run').onclick = async () => {
+    const box = $('#qa-result')
+    box.innerHTML = '<div class="sk sk-line"></div><div class="sk sk-line short"></div>'
+    try {
+      const r = await api('POST', tenantUrl('/qa'))
+      box.innerHTML = `
+        <div class="qa-score ${r.score >= 90 ? 'good' : 'warn'}"><strong>${r.score}%</strong> das frases do ramo respondidas certo (${r.ok} de ${r.total})</div>
+        <h4>Fluxos básicos</h4>
+        <ul class="qa-flows">${r.flows.map(f => `<li class="${f.ok ? 'ok' : 'bad'}">${f.ok ? '✅' : '❌'} ${esc(f.name)}${f.ok ? '' : ` — <span class="muted">${esc(f.detail)}</span>`}</li>`).join('')}</ul>
+        ${r.missingTopics.length ? `<h4>Assuntos sem informação preenchida (${r.missingTopics.length})</h4>
+          <p class="muted">O bot reconhece estas perguntas, mas não responde porque falta a informação do negócio (aba Conhecimento).</p>
+          <ul class="qa-missing">${r.missingTopics.map(m => `<li><b>${esc(m.title)}</b> <span class="muted">— falta: ${esc(m.missing.join(', ') || 'resposta desativada')}</span></li>`).join('')}</ul>` : '<p>✅ Todas as informações dos assuntos estão preenchidas.</p>'}
+        ${r.results.length ? `<h4>Frases com problema (${r.results.length})</h4>
+          <div class="table-wrap"><table><thead><tr><th>Frase</th><th>Resultado</th></tr></thead><tbody>
+          ${r.results.map(x => `<tr><td>“${esc(x.text)}”</td><td class="muted">${x.status === 'sem-info'
+            ? `Falta preencher: ${esc((x.missing ?? []).join(', '))}`
+            : x.got ? `Respondeu “${esc(x.title)}” (esperado outro assunto)` : 'Não respondeu'}</td></tr>`).join('')}
+          </tbody></table></div>` : ''}`
+    } catch (err) { box.innerHTML = `<p class="error">${esc(err.message)}</p>` }
+  }
+
+  $('#tests-run')?.addEventListener('click', async () => {
+    const results = await api('POST', tenantUrl('/tests/run'))
+    for (const r of results) {
+      const item = view.querySelector(`.test-item[data-id="${r.id}"]`)
+      if (!item) continue
+      $('.test-result', item).innerHTML = r.ok
+        ? '<span class="tag ok">✅ Passou</span>'
+        : `<span class="tag alert">❌ Mudou em ${r.diffs.length} resposta(s)</span>
+           ${r.diffs.map(d => `<div class="diff"><div><b>Cliente:</b> ${esc(d.said)}</div>
+             <div class="diff-old"><b>Antes:</b> ${waFormat(d.expected)}</div><div class="diff-new"><b>Agora:</b> ${waFormat(d.got)}</div></div>`).join('')}
+           <button class="btn small test-accept">A resposta nova está certa</button>`
+      $('.test-accept', item)?.addEventListener('click', async () => {
+        await api('POST', tenantUrl(`/tests/${r.id}/accept`))
+        toast('Resposta esperada atualizada ✔')
+        $('.test-result', item).innerHTML = '<span class="tag ok">✅ Atualizado</span>'
+      })
+    }
+    toast(`${results.filter(r => r.ok).length} de ${results.length} teste(s) passaram.`)
+  })
+  for (const b of view.querySelectorAll('.test-del')) {
+    b.onclick = async () => {
+      const id = b.closest('.test-item').dataset.id
+      if (!confirm('Excluir este teste?')) return
+      await api('DELETE', tenantUrl(`/tests/${id}`))
+      renderQuality()
+    }
+  }
+}
 
 // ---------- Simulador (celular desenhado) ----------
 
@@ -1169,6 +1327,8 @@ async function renderKnowledge () {
   const topicTitles = Object.fromEntries(details.flatMap(p => p.topics.map(t => [`${p.id}/${t.key}`, `${p.name} › ${t.title}`])))
   const topicVars = Object.fromEntries(details.flatMap(p => p.topics.map(t => [`${p.id}/${t.key}`, placeholders(t.answer)])))
   const labels = Object.fromEntries(packs.flatMap(p => p.variables.map(v => [v.key, v.label])))
+  const topicOptions = selected => details.map(p => `<optgroup label="${esc(p.name)}">${p.topics.map(t =>
+    `<option value="${esc(p.id)}/${esc(t.key)}" ${`${p.id}/${t.key}` === selected ? 'selected' : ''}>${esc(t.title)}</option>`).join('')}</optgroup>`).join('')
 
   const varsHtml = details.map(p => {
     const list = packs.find(x => x.id === p.id).variables
@@ -1250,17 +1410,23 @@ async function renderKnowledge () {
       </section>` : ''}
 
       <section class="card stack">
-        <h3>Perguntas sem resposta <span class="badge ${unanswered.length ? '' : 'hidden'}">${unanswered.length}</span></h3>
-        <p class="muted">O que os clientes perguntaram e o bot não soube responder. Use para completar as informações ou criar novas respostas.</p>
-        ${unanswered.length ? `<div class="table-wrap"><table>
-          <thead><tr><th>Pergunta</th><th>Vezes</th><th>Motivo</th><th>Última</th><th></th></tr></thead>
-          <tbody>${unanswered.map(u => {
-            const reason = u.topic
-              ? `Assunto reconhecido (${esc(topicTitles[u.topic] ?? u.topic)}), mas falta: ${esc((topicVars[u.topic] ?? []).filter(x => !builtin[x]).map(x => labels[x] ?? x).join(', ') || 'resposta ativa')}`
-              : 'Nenhum assunto parecido no banco'
-            return `<tr><td>${esc(u.text)}</td><td>${u.count}</td><td class="muted">${reason}</td><td>${time(u.lastAt)}</td>
-              <td><button class="btn small ghost kb-del" data-id="${u.id}" aria-label="Remover">✕</button></td></tr>`
-          }).join('')}</tbody></table></div>` : '<p class="muted">Nenhuma por enquanto. 🎉</p>'}
+        <h3>Treinar o bot <span class="badge ${unanswered.length ? '' : 'hidden'}">${unanswered.length}</span></h3>
+        <p class="muted">Perguntas que o bot não soube responder ou que foram marcadas com 👎 nas Conversas. Escolha o assunto certo e clique em <b>Ensinar</b>: a frase vira uma nova forma de perguntar e o bot passa a acertar.</p>
+        ${unanswered.length ? `<div class="train-list">${unanswered.map(u => {
+            const reason = u.topic === 'resposta-errada' ? '👎 Resposta marcada como errada'
+              : u.topic ? `Assunto reconhecido (${esc(topicTitles[u.topic] ?? u.topic)}), mas falta: ${esc((topicVars[u.topic] ?? []).filter(x => !builtin[x]).map(x => labels[x] ?? x).join(', ') || 'resposta ativa')}`
+              : 'Nenhum assunto parecido'
+            const selected = topicTitles[u.topic] ? u.topic : ''
+            return `<div class="train-item" data-id="${u.id}" data-text="${esc(u.text)}">
+              <div class="train-q"><strong>“${esc(u.text)}”</strong> <span class="muted">· ${u.count}x · ${time(u.lastAt)}</span><br><span class="muted" style="font-size:.84rem">${reason}</span></div>
+              <div class="row train-actions">
+                <select class="train-topic" aria-label="Assunto certo"><option value="">Escolha o assunto certo…</option>${topicOptions(selected)}</select>
+                ${isAdmin ? '<label class="check" title="Grava no pacote: vale para todos os clientes"><input type="checkbox" class="train-global"> Todos os clientes</label>' : ''}
+                <button class="btn small primary train-btn">Ensinar</button>
+                <button class="btn small ghost kb-del" data-id="${u.id}" aria-label="Descartar">✕</button>
+              </div>
+            </div>`
+          }).join('')}</div>` : '<p class="muted">Nada para treinar por enquanto. 🎉</p>'}
       </section>
 
       ${isAdmin ? `<section class="card stack">
@@ -1289,6 +1455,20 @@ async function renderKnowledge () {
 
   for (const b of view.querySelectorAll('.kb-del')) {
     b.onclick = async () => { await api('DELETE', tenantUrl(`/knowledge/unanswered/${b.dataset.id}`)); renderKnowledge(); updateBadges() }
+  }
+  for (const item of view.querySelectorAll('.train-item')) {
+    $('.train-btn', item).onclick = async () => {
+      const key = $('.train-topic', item).value
+      if (!key) { toast('Escolha o assunto certo primeiro.', 'error'); return }
+      try {
+        const r = await api('POST', tenantUrl('/knowledge/train'), {
+          text: item.dataset.text, key, unansweredId: item.dataset.id, global: $('.train-global', item)?.checked === true,
+        })
+        toast(r.global ? 'Ensinado para todos os clientes ✔' : 'Ensinado ✔ O bot já entende essa frase.')
+        renderKnowledge()
+        updateBadges()
+      } catch (err) { toast(err.message, 'error') }
+    }
   }
 
   $('#kb-import')?.addEventListener('change', async e => {
@@ -1515,6 +1695,7 @@ async function renderClientConfig () {
         <h3>Produtos e preços</h3>
         <div id="product-rows">${c.products.map(productRow).join('')}</div>
         <div><button type="button" class="btn small" id="add-product">+ Adicionar produto</button></div>
+        ${catalogRulesHtml(c)}
       </section>` : ''}
       <section class="card stack">
         <h3>Senha do painel</h3>
@@ -1538,10 +1719,9 @@ async function renderClientConfig () {
       }
     }
     if (products) {
-      body.products = [...form.querySelectorAll('.product-row')].map(r => ({
-        id: r.dataset.id, name: $('[name=name]', r).value, price: $('[name=price]', r).value,
-        description: $('[name=description]', r).value, active: $('[name=active]', r).checked,
-      }))
+      body.products = [...form.querySelectorAll('.product-row')].map(productFromRow)
+      body.halfHalf = v('halfHalf').value
+      body.synonyms = v('synonyms').value
     }
     try {
       await api('PUT', tenantUrl('/config'), body)

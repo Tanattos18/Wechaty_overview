@@ -3,6 +3,15 @@ import fsp from 'node:fs/promises'
 import path from 'node:path'
 import type { AdjustmentRequest, Channel, ChatMessage, Conversation, Order, TenantConfig } from './types.js'
 
+/** Conversa guardada como teste: as mensagens do cliente e as respostas que o bot deve dar. */
+export interface SavedTest {
+  id: string
+  title: string
+  messages: string[]
+  expected: string[][]
+  createdAt: string
+}
+
 const MAX_MESSAGES_PER_CHAT = 300
 const TENANT_ID_RE = /^[a-z0-9][a-z0-9-]{1,40}$/
 
@@ -169,6 +178,24 @@ export class Store {
     const rt = this.runtime(tenantId)
     this.schedule(path.join(this.runtimeDir, tenantId, 'requests.json'), () => JSON.stringify(rt.requests, null, 2))
   }
+
+  // ---------- conversas salvas como teste ----------
+
+  listTests (tenantId: string): SavedTest[] {
+    const file = path.join(this.runtimeDir, tenantId, 'tests.json')
+    const cached = this.tests.get(tenantId)
+    if (cached) return cached
+    const list = readJson<SavedTest[]>(file, [])
+    this.tests.set(tenantId, list)
+    return list
+  }
+
+  saveTests (tenantId: string, list: SavedTest[]): void {
+    this.tests.set(tenantId, list)
+    this.schedule(path.join(this.runtimeDir, tenantId, 'tests.json'), () => JSON.stringify(list, null, 2))
+  }
+
+  private tests = new Map<string, SavedTest[]>()
 
   // ---------- gravação ----------
 

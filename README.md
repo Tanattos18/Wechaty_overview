@@ -121,6 +121,27 @@ com **85 assuntos e ~1.700 formas de perguntar**, em 5 pacotes:
 - Frases variadas, oferta de produto com continuidade ("Quer que eu anote uma?" → "sim" anota).
 - No WhatsApp, o bot marca como lido e mostra **"digitando…"** por um tempo proporcional à resposta
   (`HUMAN_TYPING=true`). O Simulador do painel tem o mesmo ritmo (opção *Ritmo real*).
+- **Memória curta:** "quanto custa ela?", "mais uma", "quero essa" (depois da promoção) se referem
+  ao último produto falado; "já pedi" mostra o pedido anotado.
+- **Várias perguntas numa mensagem:** "qual o horário e aceita pix?" responde as duas.
+- **Na dúvida, pergunta:** "Você quis dizer: *1* - … *2* - …?". O número escolhido é respondido e a
+  frase fica ensinada para aquele cliente.
+- **Cardápio com opções:** cada produto pode ter tamanhos (`Média=49,90; Grande=59,90`) e adicionais;
+  sem tamanho, o bot pergunta. Pizza meio a meio cobra o sabor mais caro, a média, ou fica desligada.
+- **Sinônimos por cliente** (Configuração): `coca=refrigerante`, `4 queijos=quatro queijos`…
+
+## Treinar e medir a qualidade
+
+- **👎 nas Conversas:** marca uma resposta errada; a pergunta vai para *Conhecimento → Treinar o bot*,
+  onde você escolhe o assunto certo (só para o cliente ou, no Super Admin, para todos).
+- **Aba Qualidade:** % de mensagens entendidas por dia, o que mais falhou, quantas vezes chamou
+  atendente e quantas respostas foram marcadas como erradas.
+- **Bateria de testes:** frases típicas do ramo (`knowledge/qa-phrases.json`) e os fluxos básicos
+  rodados com a configuração do cliente, sem mexer nas conversas reais. Mostra a nota e os assuntos
+  sem informação cadastrada.
+- **Conversa → teste salvo:** o ícone de salvar na conversa guarda as respostas atuais; depois de cada
+  ajuste, *Rodar testes salvos* mostra o que mudou (e *Aceitar* atualiza o esperado).
+- **Exportar conversas** em `.txt` ou `.json`.
 
 ## Vários clientes ao mesmo tempo
 

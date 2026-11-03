@@ -8,12 +8,23 @@ export interface MenuOption {
   text?: string
 }
 
+/** Tamanho ou adicional de um produto, com o próprio preço. */
+export interface ProductOption {
+  name: string
+  price: number
+}
+
 export interface Product {
   id: string
   name: string
+  /** Preço base (usado quando o produto não tem tamanhos). */
   price: number
   description?: string
   active: boolean
+  /** Tamanhos com preço próprio (ex.: Média R$ 49,90, Grande R$ 59,90). O bot pergunta se o cliente não disser. */
+  sizes?: ProductOption[]
+  /** Adicionais cobrados à parte (ex.: borda de catupiry +R$ 9,00). */
+  extras?: ProductOption[]
 }
 
 export interface ClientPermissions {
@@ -82,6 +93,10 @@ export interface TenantConfig {
   clientCan?: ClientPermissions
   /** Frases prontas para o atendente responder com um clique. */
   quickReplies?: string[]
+  /** Como cobrar pizza meio a meio: pelo sabor mais caro, pela média, ou não aceita. Sem valor: o bot não monta meio a meio. */
+  halfHalf?: 'max' | 'avg' | 'off'
+  /** Palavras do cliente -> termo do cardápio (ex.: "coca" -> "refrigerante", "4 queijos" -> "quatro queijos"). */
+  synonyms?: Record<string, string>
   /** Plano contratado: quantos ajustes por mês estão incluídos na mensalidade. */
   plan?: { name: string; adjustmentsPerMonth: number }
   /** Base de conhecimento: pacotes ativos, informações do negócio e respostas personalizadas. */
@@ -90,6 +105,8 @@ export interface TenantConfig {
     variables: Record<string, string>
     /** Chave "pacote/assunto" -> resposta própria ou assunto desativado */
     overrides: Record<string, { answer?: string; enabled?: boolean }>
+    /** Formas de perguntar ensinadas a este cliente (tela "Treinar"): "pacote/assunto" -> frases */
+    extraQuestions?: Record<string, string[]>
   }
 }
 
@@ -109,10 +126,16 @@ export interface CartItem {
   qty: number
 }
 
+/** Que tipo de resposta o bot deu (alimenta o painel de qualidade). */
+export type ReplyKind = 'kb' | 'order' | 'catalog' | 'handoff' | 'clarify' | 'fallback' | 'other'
+
 export interface ChatMessage {
   from: 'customer' | 'bot' | 'agent'
   text: string
   at: string
+  kind?: ReplyKind
+  /** Marcada no painel como resposta errada (👎). */
+  feedback?: 'bad'
 }
 
 export type Channel = 'whatsapp' | 'simulator'
@@ -130,6 +153,14 @@ export interface Conversation {
   misses?: number
   /** Produto oferecido na última resposta ("Quer que eu anote uma?"): um "sim" já adiciona. */
   offer?: string
+  /** Último produto citado, para entender "quanto custa ela?", "quero mais uma". */
+  lastProduct?: string
+  /** "Você quis dizer…?": opções oferecidas e a frase original (aprendida quando o cliente escolhe). */
+  choice?: { text: string; options: { key: string; title: string }[] }
+  /** Itens esperando o cliente escolher o tamanho. */
+  pendingSize?: { productId: string; qty: number; extras: string[] }[]
+  /** Tipo da última resposta (usado para marcar as mensagens do bot). */
+  lastKind?: ReplyKind
   unread: number
   messages: ChatMessage[]
   updatedAt: string

@@ -1,0 +1,278 @@
+[
+  {
+    "text": "vcs abrem que horas amanha?",
+    "expect": "comum/horario"
+  },
+  {
+    "text": "ate q horas fica aberto hj",
+    "expect": "comum/horario"
+  },
+  {
+    "text": "abre aos domingos?",
+    "expect": "comum/horario"
+  },
+  {
+    "text": "vocês tão funcionando agora?",
+    "expect": "comum/aberto_agora"
+  },
+  {
+    "text": "no feriado de amanhã vcs abrem?",
+    "expect": "comum/feriados"
+  },
+  {
+    "text": "me passa o endereço de vcs por favor",
+    "expect": "comum/endereco"
+  },
+  {
+    "text": "onde que fica a loja de vocês?",
+    "expect": "comum/endereco"
+  },
+  {
+    "text": "tem lugar pra estacionar o carro?",
+    "expect": "comum/estacionamento"
+  },
+  {
+    "text": "qual é o telefone fixo de vcs",
+    "expect": "comum/telefone"
+  },
+  {
+    "text": "qual o insta da loja?",
+    "expect": "comum/redes_sociais"
+  },
+  {
+    "text": "aceitam cartão de débito?",
+    "expect": "comum/formas_pagamento"
+  },
+  {
+    "text": "pode ser no vale refeição?",
+    "expect": "comum/formas_pagamento"
+  },
+  {
+    "text": "me manda a chave do pix",
+    "expect": "comum/pix"
+  },
+  {
+    "text": "da pra parcelar em 3 vezes?",
+    "expect": "comum/parcelamento"
+  },
+  {
+    "text": "vocês fazem delivery?",
+    "expect": "comum/entrega"
+  },
+  {
+    "text": "entregam no bairro boa viagem?",
+    "expect": "comum/area_entrega"
+  },
+  {
+    "text": "quanto vcs cobram de taxa de entrega?",
+    "expect": "comum/taxa_entrega"
+  },
+  {
+    "text": "o frete é gratis?",
+    "expect": "comum/taxa_entrega"
+  },
+  {
+    "text": "demora quanto tempo pra chegar?",
+    "expect": "comum/tempo_entrega"
+  },
+  {
+    "text": "qual o valor minimo do pedido?",
+    "expect": "comum/pedido_minimo"
+  },
+  {
+    "text": "posso passar ai e retirar?",
+    "expect": "comum/retirada"
+  },
+  {
+    "text": "tem alguma promoção hoje?",
+    "expect": "comum/promocoes"
+  },
+  {
+    "text": "meu pedido ainda nao chegou",
+    "expect": "comum/status_pedido"
+  },
+  {
+    "text": "quero cancelar o pedido que fiz",
+    "expect": "comum/cancelar_pedido"
+  },
+  {
+    "text": "o pedido veio errado",
+    "expect": "comum/reclamacao"
+  },
+  {
+    "text": "amei, estava tudo perfeito",
+    "expect": "comum/elogio"
+  },
+  {
+    "text": "eu to falando com um robo?",
+    "expect": "comum/robo"
+  },
+  {
+    "text": "vocês estão contratando?",
+    "expect": "comum/trabalhe_conosco"
+  },
+  {
+    "text": "qual pizza vocês recomendam?",
+    "expect": "restaurante/mais_pedido"
+  },
+  {
+    "text": "tem alguma opção vegana?",
+    "expect": "restaurante/vegetariano"
+  },
+  {
+    "text": "sou celiaca, tem massa sem gluten?",
+    "expect": "restaurante/restricoes"
+  },
+  {
+    "text": "a pizza grande tem quantas fatias?",
+    "expect": "restaurante/tamanhos"
+  },
+  {
+    "text": "tem borda recheada de catupiry?",
+    "expect": "restaurante/bordas"
+  },
+  {
+    "text": "posso pedir metade de cada sabor?",
+    "expect": "restaurante/meio_a_meio"
+  },
+  {
+    "text": "pode vir sem cebola?",
+    "expect": "restaurante/personalizar"
+  },
+  {
+    "text": "quero reservar mesa pra sabado",
+    "expect": "restaurante/reservas"
+  },
+  {
+    "text": "tem cerveja gelada?",
+    "expect": "restaurante/bebidas"
+  },
+  {
+    "text": "vocês tem sobremesa?",
+    "expect": "restaurante/sobremesas"
+  },
+  {
+    "text": "vocês cobram os 10%?",
+    "expect": "restaurante/taxa_servico"
+  },
+  {
+    "text": "posso levar meu cachorro no restaurante?",
+    "expect": "restaurante/pet_friendly"
+  },
+  {
+    "text": "quanto custa banho num shih tzu?",
+    "expect": "petshop/preco_banho"
+  },
+  {
+    "text": "queria marcar um banho pro meu cachorro",
+    "expect": "petshop/agendar_pet"
+  },
+  {
+    "text": "vocês aplicam vacina antirrabica?",
+    "expect": "petshop/vacinas"
+  },
+  {
+    "text": "meu cachorro ta vomitando, tem veterinario?",
+    "expect": "petshop/veterinario"
+  },
+  {
+    "text": "vocês buscam o cachorro em casa?",
+    "expect": "petshop/leva_e_traz"
+  },
+  {
+    "text": "tem hotelzinho pra cachorro?",
+    "expect": "petshop/hospedagem"
+  },
+  {
+    "text": "vocês dão banho em gato?",
+    "expect": "petshop/atende_gatos"
+  },
+  {
+    "text": "quanto tempo demora a tosa?",
+    "expect": "petshop/tempo_banho"
+  },
+  {
+    "text": "meu cachorro morde, vocês atendem?",
+    "expect": "petshop/comportamento_pet"
+  },
+  {
+    "text": "vocês fazem progressiva?",
+    "expect": "salao/servicos_salao"
+  },
+  {
+    "text": "quanto ta a escova?",
+    "expect": "salao/precos_salao"
+  },
+  {
+    "text": "tem horário pra hoje a tarde?",
+    "expect": "salao/disponibilidade_hoje"
+  },
+  {
+    "text": "preciso remarcar meu horario",
+    "expect": "salao/remarcar_salao"
+  },
+  {
+    "text": "quanto tempo leva uma coloração?",
+    "expect": "salao/tempo_servicos"
+  },
+  {
+    "text": "vocês atendem em casa?",
+    "expect": "salao/domicilio"
+  },
+  {
+    "text": "vocês cortam cabelo de criança?",
+    "expect": "salao/publico"
+  },
+  {
+    "text": "tem essa blusa no tamanho gg?",
+    "expect": "loja/tamanhos_loja"
+  },
+  {
+    "text": "como funciona a troca?",
+    "expect": "loja/troca"
+  },
+  {
+    "text": "quero devolver e receber o dinheiro",
+    "expect": "loja/devolucao"
+  },
+  {
+    "text": "vocês enviam pra são paulo?",
+    "expect": "loja/frete_loja"
+  },
+  {
+    "text": "me manda o codigo de rastreio",
+    "expect": "loja/rastreio"
+  },
+  {
+    "text": "vende no atacado?",
+    "expect": "loja/atacado"
+  },
+  {
+    "text": "tem cupom de primeira compra?",
+    "expect": "loja/cupom"
+  },
+  {
+    "text": "qual o horario do jogo do flamengo",
+    "expect": null
+  },
+  {
+    "text": "me conta uma piada",
+    "expect": null
+  },
+  {
+    "text": "quem ganhou a eleição",
+    "expect": null
+  },
+  {
+    "text": "qual a capital da frança",
+    "expect": null
+  },
+  {
+    "text": "quero aprender a programar",
+    "expect": null
+  },
+  {
+    "text": "ok",
+    "expect": null
+  }
+]

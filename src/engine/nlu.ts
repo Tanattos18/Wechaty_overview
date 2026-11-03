@@ -30,7 +30,7 @@ const STOPWORDS = new Set((
   'pra para por pelo pela com sem no na nos nas em ao aos eu me mim meu minha voce voces vc vcs ' +
   'seu sua seus suas ele ela isso esse essa este esta aqui ai la ja se mais muito bem so tambem ' +
   'tem tem ter tenho e sao foi ser esta estao como onde quando porque pq ne ok sim nao ' +
-  'quero queria gostaria saber pode poderia favor por favor oi ola obrigado obrigada tudo bom dia tarde noite'
+  'quero queria gostaria teria teriam saber pode poderia favor por favor oi ola obrigado obrigada tudo bom dia tarde noite'
 ).split(' '))
 
 const NUMBER_WORDS: Record<string, number> = {

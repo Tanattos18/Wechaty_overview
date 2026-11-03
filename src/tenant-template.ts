@@ -1,4 +1,4 @@
-import type { MenuOption, Product, TenantConfig } from './types.js'
+import type { MenuOption, Product, ProductOption, TenantConfig } from './types.js'
 
 /** Configuração inicial de um cliente novo — tudo editável depois pelo painel. */
 export function newTenant (id: string, name: string, segmentPack?: string): TenantConfig {
@@ -58,7 +58,41 @@ function sanitizeKnowledge (input: any, current: TenantConfig['knowledge']): Non
     const enabled = v.enabled !== false
     if (answer.trim() || !enabled) overrides[k] = { ...(answer.trim() ? { answer } : {}), ...(!enabled ? { enabled: false } : {}) }
   }
-  return { packs, variables, overrides }
+  // Frases ensinadas (tela "Treinar") só mudam pela rota própria: salvar a configuração nunca apaga
+  return { packs, variables, overrides, ...(base.extraQuestions ? { extraQuestions: base.extraQuestions } : {}) }
+}
+
+/**
+ * Tamanhos/adicionais vindos do painel: lista de {name, price} ou texto
+ * "Média=49,90; Grande=59,90" (também aceita uma opção por linha).
+ */
+function sanitizeOptions (input: unknown): ProductOption[] | undefined {
+  const raw: { name: unknown; price: unknown }[] = Array.isArray(input)
+    ? input
+    : typeof input === 'string'
+      ? input.split(/[;\n]+/).map(part => {
+          const m = /^(.+?)\s*[=:]\s*(?:R\$\s*)?([\d.,]+)\s*$/.exec(part.trim())
+          return m ? { name: m[1], price: m[2] } : { name: '', price: 0 }
+        })
+      : []
+  const out = raw.slice(0, 12).map(o => ({
+    name: str(o?.name, 40).trim(),
+    price: Math.max(0, Math.round(Number(String(o?.price ?? '').replace(/\.(?=\d{3}\b)/g, '').replace(',', '.')) * 100) / 100 || 0),
+  })).filter(o => o.name)
+  return out.length ? out : undefined
+}
+
+/** Sinônimos: objeto {de: para} ou texto "coca=refrigerante" (um por linha). */
+function sanitizeSynonyms (input: unknown, current: TenantConfig['synonyms']): TenantConfig['synonyms'] {
+  if (input === undefined) return current
+  const pairs: [string, string][] = typeof input === 'string'
+    ? input.split('\n').map(l => l.split('=').map(s => s.trim()) as [string, string]).filter(p => p.length === 2)
+    : Object.entries(input && typeof input === 'object' ? input as Record<string, string> : {})
+  const out: Record<string, string> = {}
+  for (const [from, to] of pairs.slice(0, 100)) {
+    if (typeof from === 'string' && typeof to === 'string' && from.trim() && to.trim()) out[from.trim().slice(0, 40)] = to.trim().slice(0, 60)
+  }
+  return Object.keys(out).length ? out : undefined
 }
 
 const MENU_TYPES = new Set<MenuOption['type']>(['text', 'catalog', 'human', 'ai'])
@@ -88,8 +122,12 @@ export function sanitizeTenant (input: any, current: TenantConfig): TenantConfig
         price: Math.max(0, Math.round(Number(p?.price) * 100) / 100 || 0),
         description: str(p?.description, 300),
         active: p?.active !== false,
+        sizes: sanitizeOptions(p?.sizes),
+        extras: sanitizeOptions(p?.extras),
       })).filter((p: Product) => p.name)
     : current.products
+  const halfHalf = input?.halfHalf === undefined ? current.halfHalf
+    : ['max', 'avg', 'off'].includes(input.halfHalf) ? input.halfHalf as TenantConfig['halfHalf'] : undefined
 
   return {
     ...current,
@@ -119,5 +157,7 @@ export function sanitizeTenant (input: any, current: TenantConfig): TenantConfig
     humanTimeoutMin: Math.min(24 * 60, Math.max(1, Number(input?.humanTimeoutMin) || current.humanTimeoutMin)),
     knowledge: sanitizeKnowledge(input?.knowledge, current.knowledge),
     style: input?.style === 'menu' ? 'menu' : input?.style === 'human' ? 'human' : current.style,
+    halfHalf,
+    synonyms: sanitizeSynonyms(input?.synonyms, current.synonyms),
   }
 }
