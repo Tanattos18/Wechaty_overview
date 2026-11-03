@@ -1,3 +1,4 @@
+import fs from 'node:fs'
 import path from 'node:path'
 import { BotManager } from './channels/whatsapp.js'
 import { createClaudeResponder, createOpenRouterResponder } from './engine/ai.js'
@@ -19,6 +20,12 @@ if (sessionSecret.length < 32 || adminPassword.length < 8) {
   process.exit(1)
 }
 
+// Primeira instalação: começa com o cliente de exemplo (as configurações reais ficam fora do Git)
+const clientsDir = path.join(dataDir, 'clients')
+if (!fs.existsSync(clientsDir) || !fs.readdirSync(clientsDir).some(f => f.endsWith('.json'))) {
+  fs.mkdirSync(clientsDir, { recursive: true })
+  for (const f of fs.readdirSync('examples/clients')) fs.copyFileSync(path.join('examples/clients', f), path.join(clientsDir, f))
+}
 const store = new Store(dataDir)
 
 // Base de conhecimento: SQLite em data/knowledge.db, alimentado pelos pacotes de knowledge/packs

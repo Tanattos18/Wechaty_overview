@@ -10,3 +10,6 @@ data/knowledge.db*
 
 *.tmp
 .claude/
+
+# Configuração dos clientes (editada pelo painel em produção; o exemplo fica em examples/clients)
+data/clients/

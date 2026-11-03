@@ -19,7 +19,7 @@ after(() => kb.close())
 
 function setup () {
   const store = new Store(fs.mkdtempSync(path.join(dir, 'store-')))
-  const demo = JSON.parse(fs.readFileSync('data/clients/demo.json', 'utf8')) as TenantConfig
+  const demo = JSON.parse(fs.readFileSync('examples/clients/demo.json', 'utf8')) as TenantConfig
   demo.ai.enabled = false
   store.saveTenant(demo)
   const engine = new Engine({ store, knowledge: kb, random: () => 0 })

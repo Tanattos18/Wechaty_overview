@@ -17,7 +17,7 @@ kb.syncFromDir(path.resolve('knowledge/packs'))
 after(() => kb.close())
 
 const demo = () => {
-  const t = JSON.parse(fs.readFileSync('data/clients/demo.json', 'utf8')) as TenantConfig
+  const t = JSON.parse(fs.readFileSync('examples/clients/demo.json', 'utf8')) as TenantConfig
   t.ai.enabled = false
   return t
 }
