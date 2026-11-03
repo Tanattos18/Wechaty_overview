@@ -278,6 +278,8 @@ button.stat:hover { border-color: color-mix(in oklab, var(--primary) 50%, var(--
 .bubble .ticks { color: #53bdeb; }
 .bubble .who { display: inline-flex; align-items: center; gap: .25rem; font-size: .72rem; font-weight: 700; color: var(--primary); margin-bottom: .1rem; }
 .bubble .who.agent { color: #2563eb; }
+.bubble .who.ai { color: #7c3aed; }
+:root[data-theme="dark"] .bubble .who.ai { color: #a78bfa; }
 .bubble.customer { align-self: flex-start; background: var(--bubble-in); border-top-left-radius: 0; }
 .bubble.bot, .bubble.agent { align-self: flex-end; background: var(--bubble-out); border-top-right-radius: 0; }
 .bubble.agent { background: var(--bubble-agent); }

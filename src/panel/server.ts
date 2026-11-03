@@ -358,7 +358,8 @@ export function createPanel (deps: PanelDeps) {
       text: String(req.body?.text ?? '').slice(0, 4000),
       channel: 'simulator',
     })
-    res.json({ chatId, replies })
+    const kind = store.getConversation(tenant.id, chatId, '', 'simulator').lastKind
+    res.json({ chatId, replies, kind })
   })
 
   // ---------- base de conhecimento ----------

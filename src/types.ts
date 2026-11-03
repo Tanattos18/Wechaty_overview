@@ -127,7 +127,7 @@ export interface CartItem {
 }
 
 /** Que tipo de resposta o bot deu (alimenta o painel de qualidade). */
-export type ReplyKind = 'kb' | 'order' | 'catalog' | 'handoff' | 'clarify' | 'fallback' | 'other'
+export type ReplyKind = 'kb' | 'order' | 'catalog' | 'handoff' | 'clarify' | 'fallback' | 'ai' | 'other'
 
 export interface ChatMessage {
   from: 'customer' | 'bot' | 'agent'
@@ -189,6 +189,8 @@ export interface Order {
 export interface AiResult {
   text: string
   handoff: boolean
+  /** A IA não tinha a informação: a pergunta vai para a fila de treino do cliente. */
+  missing?: boolean
 }
 
 /** Gera a resposta livre da IA para a última mensagem da conversa. */

@@ -9,7 +9,7 @@ import { exportConversations, qualityStats, runQa, runSavedTests } from '../src/
 import { parseReply, systemPrompt } from '../src/engine/ai.js'
 import { replay } from '../src/quality/replay.js'
 import { Store } from '../src/store.js'
-import type { TenantConfig } from '../src/types.js'
+import type { AiResponder, TenantConfig } from '../src/types.js'
 
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'chatbot-features-'))
 const kb = new KnowledgeBase(path.join(dir, 'knowledge.db'))
@@ -261,5 +261,38 @@ describe('Simulação real: promoção, "quero a 1 e a 4" e fechamento', () => {
     await t.say('sim')
     assert.match(await t.say('sim não e um nome'), /Qual nome eu coloco/)
     assert.match(await t.say('rua das flores 120'), /Nome: Maria/)
+  })
+})
+
+describe('Pergunta sobre item do cardápio nunca vira pedido', () => {
+  const start = async (ai?: AiResponder) => {
+    const tenant = demo()
+    tenant.ai.enabled = Boolean(ai)
+    const store = new Store(fs.mkdtempSync(path.join(dir, 's-')))
+    store.saveTenant(tenant)
+    const engine = new Engine({ store, knowledge: kb, ai, random: () => 0 })
+    const say = async (text: string) => (await engine.handle({ tenantId: tenant.id, chatId: 'c', name: 'Maria', text, channel: 'simulator' })).join('\n---\n')
+    await say('oi')
+    await say('qual o cardapio')
+    await say('quero a 1 e a 4')
+    return { say, conv: () => store.getConversation(tenant.id, 'c', '', 'simulator') }
+  }
+
+  it('sem IA: "a 1 tem refri incluso?" responde pela descrição e não mexe no pedido', async () => {
+    const t = await start()
+    assert.match(await t.say('a 1 tem refri incluso ?'), /Não, a \*Pizza Margherita\* não vem com refrigerante/)
+    assert.match(await t.say('perguntei se o numero 1 do cardápio ja tem refrigerante incluso'), /já está no seu pedido/)
+    assert.deepEqual(t.conv().cart.map(i => i.qty), [1, 1])
+  })
+
+  it('com IA: a pergunta vai para a IA e a resposta é marcada como IA', async () => {
+    const t = await start(async () => ({ text: 'Não vem refri, ele é à parte 😊', handoff: false }))
+    assert.equal(await t.say('a 1 tem refri incluso ?'), 'Não vem refri, ele é à parte 😊')
+    assert.equal(t.conv().lastKind, 'ai')
+    assert.deepEqual(t.conv().cart.map(i => i.qty), [1, 1])
+  })
+
+  it('[SEM_INFO] some do texto e marca a falta de informação', () => {
+    assert.deepEqual(parseReply('Não tenho essa informação agora. [SEM_INFO]'), { text: 'Não tenho essa informação agora.', handoff: false, missing: true })
   })
 })

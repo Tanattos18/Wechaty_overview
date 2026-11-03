@@ -64,6 +64,10 @@ const MORE_RE = /\b(?:mais|\+)\s*(\d{1,2}|uma|um|duas|dois|tres)\b(?!\s+(?:de|do
 const ONLY_THIS_RE = /\b(so|somente|apenas) (tem )?(essa|esse|essas|esses|ela|uma|isso)\b|\b(mais|outra|outras) (alguma )?promoc/
 /** Parece endereço: número ou palavra de logradouro. */
 const ADDRESS_RE = /\d|\b(rua|r|av|avenida|travessa|tv|alameda|estrada|rodovia|praca|quadra|qd|lote|lt|bairro|condominio|cond|apto|apartamento|ap|casa|bloco|km|setor|vila|jardim|centro|perto|proximo|esquina|residencial|loteamento|chacara|sitio|fazenda)\b/
+/** Pergunta mesmo sem "?" nem palavra interrogativa no começo. */
+const QUESTION_CUE_RE = /\b(perguntei|pergunta|pergunto|sera que|se ja|se tem|se vem|incluso|inclusa|incluido|inclui|vem com|acompanha|serve quantas|quantas pessoas|quantos pedacos|quantas fatias)\b/
+/** Item do cardápio pelo número numa pergunta: "a 1 tem…", "o numero 2 vem com…". */
+const NUMBER_REF_RE = /(?:^|\b(?:a|o|na|no|da|do|numero|num|n|item|opcao)\s+)(\d{1,2})\b(?!\s*(?:x|reais|real|pessoas|fatias|pedacos|min|minutos|horas|h)\b)/
 const PROMO_RE = /\b(promocao|promocoes|promo|combo|oferta)\b/
 const HALF_RE = /\b(meio a meio|metade|meia|meio)\b/
 const INFO_INTENTS: Intent[] = ['hours', 'address', 'phone', 'delivery', 'payment']
@@ -356,7 +360,7 @@ export class Engine {
     const has = (i: Intent) => intents.includes(i)
     const short = n.split(' ').length <= 6
     const asksInfo = INFO_INTENTS.some(has)
-    const isQuestion = QUESTION_RE.test(n)
+    const isQuestion = QUESTION_RE.test(n) || QUESTION_CUE_RE.test(n)
     const name = firstName(conv)
 
     if (has('human')) return { replies: [this.handoff(tenant, conv)] }
@@ -384,6 +388,21 @@ export class Engine {
     // Logo depois de mostrar a promoção: "teria outras?", "só tem essa?" falam da promoção, não do cardápio
     if (this.recentTopic(conv) === 'promocoes' && !REF_ORDER_RE.test(n) && (wantsOthers || ONLY_THIS_RE.test(n) || (PROMO_RE.test(n) && !has('order')))) {
       return { replies: [this.onlyThisPromo(tenant, conv)] }
+    }
+
+    // Pergunta sobre um item ("a 1 tem refri incluso?", "a calabresa é apimentada?"): nunca vira pedido.
+    // A IA responde com o cardápio e o pedido em mãos; sem IA, a descrição do produto.
+    const catalogShown = conv.state === 'catalog' || lastBotWasCatalog(conv) || conv.cart.length > 0
+    const numberRef = isQuestion && catalogShown ? NUMBER_REF_RE.exec(n) : null
+    const asked = numberRef ? products[Number(numberRef[1]) - 1] : undefined
+    if (isQuestion && !REF_ORDER_RE.test(n) && (asked || (match.kind === 'one' && !asksInfo && !has('price')))) {
+      const target = asked ?? (match.kind === 'one' ? match.product : undefined)!
+      if (!has('price')) {
+        const ai = await this.tryAi(tenant, conv)
+        if (ai) return ai
+      }
+      const other = match.kind === 'one' && match.product.id !== target.id ? match.product : undefined
+      return { replies: [other ? this.includesReply(target, other, conv) : this.describeProduct(target, conv, n)] }
     }
 
     // Memória curta: "quero essa", "quero ela também", "mais uma", "quanto custa ela?"
@@ -456,15 +475,8 @@ export class Engine {
     }
 
     // Perguntas abertas: a IA responde quando está configurada
-    if (this.aiAvailable(tenant)) {
-      try {
-        const result = await this.deps.ai!(tenant, conv)
-        if (result.handoff) return { replies: [result.text, this.handoff(tenant, conv)].filter(Boolean) }
-        if (result.text) return { replies: [result.text] }
-      } catch (err) {
-        console.error(`[ai] ${tenant.id}:`, err instanceof Error ? err.message : err)
-      }
-    }
+    const ai = await this.tryAi(tenant, conv)
+    if (ai) return ai
 
     // Sem IA: responde com os dados cadastrados do negócio
     const info = this.infoAnswer(tenant, n, intents)
@@ -479,6 +491,38 @@ export class Engine {
       return { replies: [`Não tenho certeza se entendi 🤔 Você quis dizer:\n\n${list}\n\nÉ só responder com o número (ou *não*, se for outra coisa).`] }
     }
     return { missingTopic }
+  }
+
+  /** Resposta da IA (OpenRouter/Claude), ou undefined se ela estiver desligada ou falhar. */
+  private async tryAi (tenant: TenantConfig, conv: Conversation): Promise<Understood | undefined> {
+    if (!this.aiAvailable(tenant)) return undefined
+    try {
+      const result = await this.deps.ai!(tenant, conv)
+      if (result.missing) {
+        const asked = [...conv.messages].reverse().find(m => m.from === 'customer')?.text
+        if (asked) this.deps.knowledge?.logUnanswered(tenant.id, normalize(asked))
+      }
+      if (result.handoff) return { replies: [result.text, this.handoff(tenant, conv)].filter(Boolean) }
+      if (result.text) {
+        conv.lastKind = 'ai'
+        return { replies: [result.text] }
+      }
+    } catch (err) {
+      console.error(`[ai] ${tenant.id}:`, err instanceof Error ? err.message : err)
+    }
+    return undefined
+  }
+
+  /** "A 1 tem refri incluso?": diz se o outro item vem junto (pela descrição) ou sai à parte. */
+  private includesReply (target: Product, other: Product, conv: Conversation): string {
+    const desc = normalize(target.description ?? '')
+    const included = keywords(normalize(other.name)).some(w => w.length >= 4 && desc.includes(w))
+    conv.lastProduct = target.id
+    if (included) return `Sim! A *${target.name}* já vem com ${other.name.toLowerCase()} 😊 _(${target.description})_ — sai por *${priceLabel(target)}*.`
+    const inCart = conv.cart.some(i => i.productId === other.id)
+    if (!inCart) conv.offer = other.id
+    return `Não, a *${target.name}* não vem com ${other.name.toLowerCase()}${target.description ? ` _(${target.description})_` : ''}.\n\n` +
+      (inCart ? `O *${other.name}* sai à parte por *${priceLabel(other)}* — e já está no seu pedido 😉` : `O *${other.name}* sai à parte por *${priceLabel(other)}*. Quer que eu anote um?`)
   }
 
   /** Assunto respondido na mensagem anterior do cliente (undefined se a conversa já seguiu). */

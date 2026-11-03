@@ -631,7 +631,7 @@ function dayLabel (iso) {
 }
 
 function bubble (m, rate = false) {
-  const who = m.from === 'bot' ? `<span class="who">${icon('bot', 13)} Bot</span>` : m.from === 'agent' ? '<span class="who agent">Atendente</span>' : ''
+  const who = m.from === 'bot' ? `<span class="who${m.kind === 'ai' ? ' ai' : ''}">${icon('bot', 13)} ${m.kind === 'ai' ? 'Bot · IA' : 'Bot'}</span>` : m.from === 'agent' ? '<span class="who agent">Atendente</span>' : ''
   const fb = rate && m.from === 'bot'
     ? `<button class="fb ${m.feedback === 'bad' ? 'on' : ''}" data-at="${esc(m.at)}" title="${m.feedback === 'bad' ? 'Marcada como errada (clique para desfazer)' : 'Resposta errada? Marque para treinar o bot'}" aria-label="Marcar resposta errada">${icon('thumbDown', 14)}</button>`
     : ''
@@ -1266,9 +1266,9 @@ async function renderSimulator () {
     box.scrollTop = box.scrollHeight
     return box.lastElementChild
   }
-  const add = (from, text) => {
+  const add = (from, text, kind) => {
     $('.sim-hint', box)?.remove()
-    box.insertAdjacentHTML('beforeend', bubble({ from, text, at: new Date().toISOString() }))
+    box.insertAdjacentHTML('beforeend', bubble({ from, text, kind, at: new Date().toISOString() }))
     box.lastElementChild.classList.add('pop')
     box.scrollTop = box.scrollHeight
   }
@@ -1287,7 +1287,7 @@ async function renderSimulator () {
           await wait(Math.min(7000, Math.max(1200, 900 + r.length * 28)) * (0.85 + Math.random() * 0.3))
           typing.remove()
         }
-        add('bot', r)
+        add('bot', r, r === res.replies[0] ? res.kind : undefined)
       }
     } catch (err) { toast(err.message, 'error') }
     status.textContent = 'online'

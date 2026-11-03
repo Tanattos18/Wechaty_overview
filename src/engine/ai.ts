@@ -4,6 +4,7 @@ import { formatPrice } from './engine.js'
 
 const HISTORY_LIMIT = 16
 const HANDOFF_MARK = '[ATENDENTE]'
+const MISSING_MARK = '[SEM_INFO]'
 
 const HANDOFF_TOOL: Anthropic.Beta.BetaTool = {
   name: 'transferir_para_atendente',
@@ -22,7 +23,7 @@ const HANDOFF_TOOL: Anthropic.Beta.BetaTool = {
 export function systemPrompt (tenant: TenantConfig): string {
   const option = (o: { name: string, price: number }) => `${o.name} ${formatPrice(o.price)}`
   const products = tenant.products.filter(p => p.active)
-    .map(p => `- ${p.name}: ${formatPrice(p.price)}${p.description ? ` (${p.description})` : ''}` +
+    .map((p, i) => `${i + 1} - ${p.name}: ${formatPrice(p.price)}${p.description ? ` (${p.description})` : ''}` +
       (p.sizes?.length ? ` | tamanhos: ${p.sizes.map(option).join(', ')}` : '') +
       (p.extras?.length ? ` | adicionais: ${p.extras.map(option).join(', ')}` : ''))
     .join('\n') || '(sem produtos cadastrados)'
@@ -34,9 +35,10 @@ export function systemPrompt (tenant: TenantConfig): string {
 Como responder:
 - Mensagens curtas, simpáticas e naturais, no estilo de WhatsApp (no máximo 3 parágrafos curtos, 1 emoji no máximo). Pode usar *negrito* do WhatsApp; não use Markdown de títulos, listas longas ou tabelas.
 - Não diga que é uma IA, robô ou assistente virtual, a não ser que perguntem diretamente.
-- Use somente as informações abaixo. Nunca invente preços, prazos, promoções, endereços ou políticas. Se algo não estiver nas informações, não afirme nem negue: diga que vai confirmar com a equipe.
+- Use somente as informações abaixo. Nunca invente preços, prazos, promoções, endereços ou políticas. Se algo não estiver nas informações, não afirme nem negue: diga com naturalidade que não tem essa informação agora, ajude com o que souber e termine com a marca ${MISSING_MARK} (ela não aparece para o cliente e avisa a empresa para cadastrar). Não chame atendente só por isso.
 - Pedidos são anotados pelo sistema quando o cliente escreve o produto e a quantidade (ex.: "quero 2 calabresa"). Você não anota pedidos: se o cliente quiser pedir, indique o produto e convide-o a escrever assim. Para fechar o pedido ele escreve *finalizar*.
-- Se o cliente pedir para falar com uma pessoa, reclamar, ou perguntar algo que as informações não respondem, responda o que souber e termine a mensagem com a marca ${HANDOFF_MARK} (ela chama um atendente e não aparece para o cliente; o sistema já avisa o cliente, então não repita que vai chamar alguém).
+- Leve em conta o pedido já anotado (abaixo): não ofereça de novo o que já está nele.
+- Só chame um atendente se o cliente pedir para falar com uma pessoa, reclamar ou estiver insatisfeito, ou se for questão de saúde (alergia, restrição alimentar). Nesses casos, responda o que souber e termine a mensagem com a marca ${HANDOFF_MARK} (ela chama um atendente e não aparece para o cliente; o sistema já avisa o cliente, então não repita que vai chamar alguém).
 
 <negocio>
 Descrição: ${tenant.business.description}
@@ -47,7 +49,7 @@ ${variables ? `${variables}\n` : ''}Informações adicionais e perguntas frequen
 ${tenant.business.extraInfo}
 </negocio>
 
-<produtos>
+<produtos> (numerados como no cardápio que o cliente vê: "a 1" é o item 1)
 ${products}
 </produtos>
 ${tenant.ai.instructions ? `\nInstruções específicas da empresa:\n${tenant.ai.instructions}\n` : ''}`
@@ -101,15 +103,16 @@ export function createClaudeResponder (model: string): AiResponder {
       .trim()
     const parsed = parseReply(text)
     const handoff = parsed.handoff || response.content.some(b => b.type === 'tool_use' && b.name === HANDOFF_TOOL.name)
-    return { text: parsed.text, handoff }
+    return { ...parsed, handoff }
   }
 }
 
 /** Separa a marca de transferência do texto que vai para o cliente. */
 export function parseReply (raw: string): AiResult {
   const handoff = raw.includes(HANDOFF_MARK)
-  const text = raw.replaceAll(HANDOFF_MARK, '').replace(/<think>[\s\S]*?<\/think>/g, '').trim()
-  return { text, handoff }
+  const missing = raw.includes(MISSING_MARK)
+  const text = raw.replaceAll(HANDOFF_MARK, '').replaceAll(MISSING_MARK, '').replace(/<think>[\s\S]*?<\/think>/g, '').trim()
+  return missing ? { text, handoff, missing } : { text, handoff }
 }
 
 /**
