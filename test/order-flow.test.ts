@@ -109,6 +109,49 @@ describe('Pedidos como o cliente escreve', () => {
     assert.match(r, /Catálogo/)
   })
 
+  // Frases das conversas reais pelo WhatsApp (Joas, Lisah e akylla shop)
+  it('"tem outro sabor?" lista as opções (antes respondia o telefone)', async () => {
+    await t.say('oi')
+    const r = await t.say('Tem outro sabor?')
+    assert.match(r, /No momento temos estas opções/)
+    assert.doesNotMatch(r, /telefone/i)
+    assert.match(await t.say('2'), /1x Pizza Calabresa/) // e dá para pedir pelo número em seguida
+  })
+
+  it('"boa" depois de anotar entende como confirmação', async () => {
+    await t.say('cardapio'); await t.say('1')
+    assert.match(await t.say('Boa'), /posso \*finalizar\*/)
+  })
+
+  it('"tem coxinha?" avisa que não está no cardápio; "tem estacionamento?" não vira produto', async () => {
+    await t.say('oi')
+    assert.match(await t.say('Tem coxinha?'), /Não encontrei \*coxinha\* no nosso cardápio/)
+    assert.doesNotMatch(await t.say('vocês tem estacionamento?'), /cardápio/)
+  })
+
+  it('"quero azeitona" sugere a pizza que leva azeitona e "sim" anota', async () => {
+    await t.say('oi')
+    assert.match(await t.say('Quero azeitona'), /Pizza Calabresa\* vem com azeitona/)
+    assert.match(await t.say('sim'), /1x Pizza Calabresa/)
+  })
+
+  it('"quanto deu tudo?" e "quanto devo pagar" mostram o total do pedido', async () => {
+    await t.say('cardapio'); await t.say('3'); await t.say('4')
+    assert.match(await t.say('Quanto deu tudo?'), /deu \*R\$\s?70,90\*/)
+    assert.match(await t.say('Quanto devo pagar'), /deu \*R\$\s?70,90\*/)
+  })
+
+  it('"quanto é a pizza meio a meio grande" explica o meio a meio', async () => {
+    await t.say('oi')
+    assert.match(await t.say('Está quanto o valor da pizza meio a meio grande'), /meio a meio/i)
+  })
+
+  it('no fechamento confirma o nome do WhatsApp com "sim" ou aceita outro nome', async () => {
+    await t.say('cardapio'); await t.say('1')
+    assert.match(await t.say('finalizar'), /no nome de \*Maria\*/)
+    assert.match(await t.say('sim'), /Prazer, Maria/)
+  })
+
   it('"quero repetir meu último pedido" chama o atendente', async () => {
     await t.say('oi')
     assert.match(await t.say('quero repetir meu último pedido'), /alguém da equipe/)

@@ -145,7 +145,7 @@ describe('Conversa natural (sem IA)', () => {
 
   it('"so isso" finaliza o pedido', async () => {
     await t.say('quero 1 margherita')
-    assert.match(await t.say('só isso'), /qual é o seu nome/)
+    assert.match(await t.say('só isso'), /no nome de \*Maria\*/)
   })
 
   it('pede atendente em linguagem natural', async () => {

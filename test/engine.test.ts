@@ -59,7 +59,7 @@ describe('Engine', () => {
     const [added] = await t.say('1 x2')
     assert.match(added, /Anotado! ✅ 2x Pizza/)
     await t.say('2')
-    assert.match((await t.say('finalizar'))[0], /seu nome/)
+    assert.match((await t.say('finalizar'))[0], /no nome de \*Maria\*/)
     assert.match((await t.say('Joana'))[0], /Prazer, Joana!.*endereço/s)
     const [summary] = await t.say('Rua A, 10')
     assert.match(summary, /Total: R\$\s?110,50/)

@@ -2,7 +2,7 @@ import type { KbResult } from '../knowledge/kb.js'
 import type { Store } from '../store.js'
 import type { AiResponder, Channel, Conversation, MenuOption, Product, TenantConfig } from '../types.js'
 import {
-  detectIntents, findProduct, parseQuantity, searchKnowledge, splitGreeting, splitItems, type Intent,
+  detectIntents, findProduct, keywords, parseQuantity, searchKnowledge, similar, splitGreeting, splitItems, type Intent,
 } from './nlu.js'
 import { periodGreeting, pick, PHRASES, type Random } from './phrases.js'
 
@@ -42,6 +42,12 @@ const NO = new Set(['nao', 'n', 'nn', 'agora nao', 'nao obrigado', 'nao obrigada
 const FINISH_RE = /^(finalizar|fechar|fechar pedido|pode fechar|so isso|e so isso|so isso mesmo|so|pronto|concluir|nada mais|mais nada|nao so isso|e so|acabou)$/
 const PICKUP_RE = /\b(retirar|retiro|retirada|buscar|busco|vou buscar|pego ai|pegar ai)\b/
 const HOW_ARE_YOU_RE = /tudo (bem|bom|certo|joia)|td bem|como vai|blz|beleza/
+const TOTAL_RE = /\b(quanto (deu|ficou|vai dar|vai ficar)|quanto (e|ta|esta|fica) (tudo|o total|meu pedido|o pedido)|quanto (eu )?(devo|vou) pagar|quanto devo|valor total|total do (meu )?pedido|qual (e )?o total|quanto custa tudo|deu quanto|ficou (em )?quanto)\b/
+/** Palavras de serviço/informação: "tem X?" com elas não é pergunta de produto. */
+const NOT_PRODUCT_RE = /^(estacionamento|vaga|wifi|wi|internet|banheiro|cadeira|mesa|reserva|entrega|delivery|frete|taxa|pix|cartao|credito|debito|dinheiro|troco|desconto|promoc|cupom|parcel|emprego|horario|atendimento|atendente|acessibilidade|rampa|ar|climatiza|espaco|kids|brinquedo|musica|show|tele|telefone|whatsapp|site|instagram|endereco|loja|unidade|filial|nota|fiscal|garantia|troca|devoluc|agenda|horar)/
+
+const ACK_WORDS = new Set(['boa', 'show', 'top', 'massa', 'otimo', 'legal', 'joia', 'combinado', 'fechou', 'tranquilo', 'entendi', 'ta bom', 'ta', 'tabom', 'perfeito', 'beleza', 'blz', 'certo', 'ok', 'okay', 'oks', 'show de bola', 'maravilha'])
+const OTHER_OPTIONS_RE = /\b((tem|teria) (outro|outra|outros|outras|mais) (sabor|sabores|opcao|opcoes|tipo|tipos|pizza|pizzas)|(outro|outros|mais) (sabor|sabores|opcoes)|so tem (esse|esses|essa|essas|isso)|tem mais (alguma coisa|opcao|opcoes|sabor|sabores))\b/
 const INFO_INTENTS: Intent[] = ['hours', 'address', 'phone', 'delivery', 'payment']
 const QUESTION_RE = /\?\s*$|^(qual|quais|como|onde|quando|quanto|o que|que|tem|voces|vcs|e)\b/
 
@@ -161,7 +167,10 @@ export class Engine {
 
     switch (conv.state) {
       case 'checkout_name': {
-        conv.checkout.name = text.replace(/^(meu nome e|me chamo|sou o|sou a|e)\s+/i, '').slice(0, 80)
+        // "sim" confirma o nome do WhatsApp; qualquer outra resposta é o nome a usar
+        conv.checkout.name = YES.has(bare) && conv.name
+          ? conv.name.slice(0, 80)
+          : text.replace(/^(meu nome (e|é)|me chamo|sou o|sou a|e|é|nao,?|não,?)\s+/i, '').slice(0, 80)
         conv.state = 'checkout_address'
         const first = firstName(conv)
         return [`Prazer${first ? `, ${first}` : ''}! 😊 Qual o endereço de entrega? Se preferir retirar aqui, é só dizer *retirar*.`]
@@ -262,6 +271,19 @@ export class Engine {
     if (has('thanks') && short) return { replies: [this.pick(PHRASES.thanks).replace('{nome}', name ? `, ${name}` : '')] }
     if (has('bye') && short) return { replies: [this.pick(PHRASES.bye)] }
 
+    // "quanto deu tudo?", "quanto devo pagar": o total do pedido, não as formas de pagamento
+    if (TOTAL_RE.test(n)) return { replies: [this.totalText(tenant, conv)] }
+    // "boa", "show", "combinado": confirmação curta
+    if (ACK_WORDS.has(n.replace(/[!.?,]+/g, '').trim())) {
+      return {
+        replies: [conv.cart.length
+          ? `${this.pick(['Show! 😊', 'Combinado! 😊', 'Beleza! 😊'])} Quer mais alguma coisa ou posso *finalizar* o pedido?`
+          : '😊 Qualquer coisa, é só chamar!'],
+      }
+    }
+    // "tem outro sabor?", "só tem esses?": lista curta do que existe
+    if (OTHER_OPTIONS_RE.test(n)) return { replies: [this.optionsSummary(tenant, conv)] }
+
     // Produtos: pedir pelo nome ("quero 2 calabresa") ou perguntar de um produto específico
     const products = this.activeProducts(tenant)
     const match = findProduct(products, n)
@@ -284,6 +306,15 @@ export class Engine {
     const kb = this.deps.knowledge?.match(tenant, n)
     if (kb?.status === 'answer') return this.knowledgeReply(tenant, conv, kb)
     const missingTopic = kb?.status === 'missing' ? `${kb.packId}/${kb.topic}` : undefined
+
+    // Ingrediente citado ("quero azeitona", "tem com cebola?"): sugere o produto que leva
+    const withIngredient = this.ingredientReply(products, conv, n)
+    if (withIngredient) return { replies: [withIngredient] }
+    // "tem coxinha?": item que não está no catálogo (só quando a base não reconheceu o assunto)
+    if (!kb && match.kind === 'none') {
+      const notSold = this.notInCatalog(tenant, conv, n)
+      if (notSold) return { replies: [notSold] }
+    }
 
     if (wantsToOrder || has('catalog') || (has('price') && !asksInfo) || (has('order') && isQuestion && !asksInfo)) {
       conv.state = 'catalog'
@@ -416,7 +447,11 @@ export class Engine {
     if (FINISH_RE.test(n) || (NO.has(n) && conv.cart.length > 0)) {
       if (conv.cart.length === 0) return 'Seu pedido ainda está vazio. Me diga o que você quer que eu anoto! 😊'
       conv.state = 'checkout_name'
-      return this.pick(PHRASES.askName)
+      // Já sabemos o nome pelo WhatsApp: só confirma, em vez de perguntar de novo
+      const known = firstName({ ...conv, checkout: {} })
+      return known
+        ? `Ótimo! Posso colocar o pedido no nome de *${known}*? Responda *sim* ou me diga o nome certo. 😊`
+        : this.pick(PHRASES.askName)
     }
     // Com o catálogo na tela, números se referem aos itens da lista: "1 e 4", "quero a 2", "duas da 3".
     // Nomes de produto seguem pelo fluxo normal, que separa pedido de pergunta ("a calabresa é apimentada?").
@@ -425,6 +460,57 @@ export class Engine {
     const onlyNumbers = chunks.length > 0 && chunks.every(c => numberedItem(c))
     const eachOne = new RegExp(`\\b(${QTY_WORD})\\s+de\\s+cada\\b`).test(n) && !QUESTION_RE.test(raw)
     return onlyNumbers || eachOne ? this.addItemsByName(tenant, conv, raw, true) : undefined
+  }
+
+  /** Total do pedido em andamento (ou do último pedido confirmado nesta conversa). */
+  private totalText (tenant: TenantConfig, conv: Conversation): string {
+    if (conv.cart.length) return `Seu pedido até agora deu *${formatPrice(cartTotal(conv))}* 😊\n\n${this.cartText(conv)}`
+    const last = this.deps.store.listOrders(tenant.id).find(o => o.chatId === conv.chatId && o.status !== 'cancelado')
+    if (last) return `Seu último pedido (*#${last.number}*) deu *${formatPrice(last.total)}*. Quer pedir mais alguma coisa? 😊`
+    return 'Seu pedido ainda está vazio. Me diga o que você quer que eu anoto! 😊'
+  }
+
+  /** Lista curta e numerada do que existe ("tem outro sabor?"). */
+  private optionsSummary (tenant: TenantConfig, conv: Conversation): string {
+    const products = this.activeProducts(tenant)
+    if (!products.length) return this.catalogText(tenant, conv)
+    conv.state = 'catalog'
+    const list = products.map((p, i) => `*${i + 1}* - ${p.name} — ${formatPrice(p.price)}`).join('\n')
+    return `No momento temos estas opções:\n\n${list}\n\nQuer pedir alguma? É só mandar o número ou o nome. 😊`
+  }
+
+  /** Procura o ingrediente na descrição dos produtos: "quero azeitona" → a Calabresa leva azeitona. */
+  private ingredientReply (products: Product[], conv: Conversation, n: string): string | undefined {
+    const nameWords = new Set(products.flatMap(p => keywords(normalize(p.name))))
+    const words = keywords(n).filter(w => w.length >= 4 && ![...nameWords].some(nw => similar(w, nw)))
+    if (!words.length) return undefined
+    const found = products.filter(p => p.description && keywords(normalize(p.description)).some(d => words.some(w => similar(w, d))))
+    if (!found.length || found.length === products.length) return undefined
+    const ingredient = words.find(w => found.some(p => keywords(normalize(p.description!)).some(d => similar(w, d))))!
+    if (found.length === 1) {
+      const p = found[0]
+      conv.offer = p.id
+      return `A *${p.name}* vem com ${ingredient} 😋 _(${p.description})_ — sai por *${formatPrice(p.price)}*.\n\nQuer que eu anote uma pra você?`
+    }
+    conv.state = 'catalog'
+    return `Temos ${ingredient} nestas opções:\n\n${found.map(p => `*${products.indexOf(p) + 1}* - ${p.name} — ${formatPrice(p.price)}\n      _${p.description}_`).join('\n')}\n\nQual você quer?`
+  }
+
+  /** "tem coxinha?" → avisa que não está no cardápio e mostra o que existe. */
+  private notInCatalog (tenant: TenantConfig, conv: Conversation, n: string): string | undefined {
+    const products = this.activeProducts(tenant)
+    if (!products.length) return undefined
+    const m = /^(?:e\s+)?(?:voces |vcs |vc |voce )?(?:tem|teria|vende|vendem|faz|fazem|trabalha com|trabalham com)\s+(.{2,40}?)[?!.]*$/.exec(n)
+    if (!m) return undefined
+    const item = m[1].replace(/^(a|o|as|os|um|uma|algum|alguma)\s+/, '').trim()
+    const words = keywords(item)
+    // Só para coisas com cara de produto: serviço e informação ("tem estacionamento?") não são itens do cardápio
+    if (!words.length || words.length > 4 || words.some(w => NOT_PRODUCT_RE.test(w)) || INFO_INTENTS.some(i => detectIntents(n).includes(i))) {
+      return undefined
+    }
+    conv.state = 'catalog'
+    const names = products.map((p, i) => `*${i + 1}* - ${p.name}`).join('\n')
+    return `Não encontrei *${item}* no nosso cardápio 😕 Por aqui temos:\n\n${names}\n\nQuer pedir alguma dessas? Se for outra coisa, digite *atendente* que alguém da equipe te ajuda.`
   }
 
   /** Ajuda curta quando o cliente quer pedir mas não deu para entender os itens. */

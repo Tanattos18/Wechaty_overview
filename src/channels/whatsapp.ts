@@ -18,7 +18,11 @@ export interface BotInfo {
 
 interface BotEntry extends BotInfo {
   client: WAWebJS.Client
+  /** IDs das últimas mensagens recebidas: o WhatsApp Web às vezes entrega a mesma mensagem duas vezes. */
+  seen: Set<string>
 }
+
+const SEEN_LIMIT = 500
 
 export interface BotManagerOptions {
   /** Chrome/Edge usado pelo WhatsApp Web (o npm não baixa o Chrome do puppeteer). */
@@ -70,7 +74,7 @@ export class BotManager {
         args: ['--no-sandbox', '--disable-setuid-sandbox'],
       },
     })
-    const entry: BotEntry = { client, status: 'starting' }
+    const entry: BotEntry = { client, status: 'starting', seen: new Set() }
     this.bots.set(tenantId, entry)
 
     client
@@ -135,6 +139,12 @@ export class BotManager {
   private async onMessage (tenantId: string, entry: BotEntry, msg: WAWebJS.Message): Promise<void> {
     if (msg.fromMe || IGNORED_CHATS.test(msg.from)) return
     if (Date.now() / 1000 - msg.timestamp > 120) return // ignora mensagens antigas sincronizadas ao conectar
+
+    // A mesma mensagem entregue duas vezes não pode ser respondida (nem anotada no pedido) duas vezes
+    const id = msg.id?._serialized ?? `${msg.from}:${msg.timestamp}:${msg.body}`
+    if (entry.seen.has(id)) return
+    entry.seen.add(id)
+    if (entry.seen.size > SEEN_LIMIT) entry.seen.delete(entry.seen.values().next().value!)
 
     const contact = await msg.getContact().catch(() => undefined)
     const text = msg.type === 'chat' ? msg.body : ''
