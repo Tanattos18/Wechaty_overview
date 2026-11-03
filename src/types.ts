@@ -79,6 +79,10 @@ export interface TenantConfig {
   ai: {
     enabled: boolean
     instructions: string
+    /** 'agent' (padrão): a IA atende a conversa toda, como funcionária. 'assist': só perguntas abertas. */
+    mode?: 'agent' | 'assist'
+    /** Nome da atendente virtual (ex.: "Ana"). */
+    agentName?: string
   }
   /** Depois de quantos minutos sem resposta do atendente o bot volta a responder. */
   humanTimeoutMin: number
@@ -146,7 +150,7 @@ export interface Conversation {
   channel: Channel
   state: ChatState
   cart: CartItem[]
-  checkout: { name?: string; address?: string; addressTries?: number }
+  checkout: { name?: string; address?: string; payment?: string; addressTries?: number }
   humanSince?: string
   needsAgent: boolean
   /** Mensagens seguidas que o bot não entendeu. */
@@ -179,6 +183,8 @@ export interface Order {
   channel: Channel
   customerName: string
   address: string
+  /** Forma de pagamento informada na conversa. */
+  payment?: string
   items: CartItem[]
   total: number
   status: OrderStatus

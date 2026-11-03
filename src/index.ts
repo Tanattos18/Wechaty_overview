@@ -2,6 +2,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { BotManager } from './channels/whatsapp.js'
 import { createClaudeResponder, createOpenRouterResponder } from './engine/ai.js'
+import { createOpenRouterAgent } from './engine/agent.js'
 import { Engine } from './engine/engine.js'
 import { KnowledgeBase } from './knowledge/kb.js'
 import { createPanel } from './panel/server.js'
@@ -37,18 +38,22 @@ if (updatedPacks.length) console.log(`[conhecimento] pacotes carregados: ${updat
 // OpenRouter tem prioridade (modelos gratuitos); Claude fica para o plano premium.
 const DEFAULT_OPENROUTER_MODELS = 'nvidia/nemotron-3.5-super-vl:free,nvidia/nemotron-3-ultra-550b-a55b:free,google/gemma-4-31b-it:free'
 const aiOn = env.AI_ENABLED !== 'false'
+const openRouterModels = (env.OPENROUTER_MODELS || DEFAULT_OPENROUTER_MODELS).split(',').map(m => m.trim()).filter(Boolean)
+// IA funcionária (atende tudo, com ferramentas de pedido): por enquanto pelo OpenRouter
+const agent = aiOn && env.OPENROUTER_API_KEY ? createOpenRouterAgent(env.OPENROUTER_API_KEY, openRouterModels) : undefined
 const ai = !aiOn
   ? undefined
   : env.OPENROUTER_API_KEY
-    ? createOpenRouterResponder(env.OPENROUTER_API_KEY, (env.OPENROUTER_MODELS || DEFAULT_OPENROUTER_MODELS).split(',').map(m => m.trim()).filter(Boolean))
+    ? createOpenRouterResponder(env.OPENROUTER_API_KEY, openRouterModels)
     : env.ANTHROPIC_API_KEY
       ? createClaudeResponder(env.CLAUDE_MODEL ?? 'claude-opus-5-5')
       : undefined
-if (ai) console.log(`[ia] ligada via ${env.OPENROUTER_API_KEY ? 'OpenRouter' : 'Claude'}`)
+if (ai) console.log(`[ia] ligada via ${env.OPENROUTER_API_KEY ? 'OpenRouter' : 'Claude'}${agent ? ' (funcionária: atende tudo)' : ''}`)
 const engine = new Engine({
   store,
   knowledge,
   ai,
+  agent,
   onOrder: (tenantId, orderId) => console.log(`[pedido] ${tenantId}: novo pedido ${orderId}`),
 })
 const bots = new BotManager(engine, store, {

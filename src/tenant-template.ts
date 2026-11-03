@@ -153,6 +153,8 @@ export function sanitizeTenant (input: any, current: TenantConfig): TenantConfig
     ai: {
       enabled: Boolean(input?.ai?.enabled),
       instructions: str(input?.ai?.instructions, 4000, current.ai.instructions),
+      mode: input?.ai?.mode === 'assist' ? 'assist' : input?.ai?.mode === 'agent' ? 'agent' : current.ai.mode ?? 'agent',
+      agentName: str(input?.ai?.agentName, 40, current.ai.agentName ?? ''),
     },
     humanTimeoutMin: Math.min(24 * 60, Math.max(1, Number(input?.humanTimeoutMin) || current.humanTimeoutMin)),
     knowledge: sanitizeKnowledge(input?.knowledge, current.knowledge),

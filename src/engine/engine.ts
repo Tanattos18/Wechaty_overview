@@ -1,5 +1,6 @@
 import type { KbResult } from '../knowledge/kb.js'
 import type { Store } from '../store.js'
+import { AGENT_TOOLS, agentHistory, agentPrompt, type AgentRunner } from './agent.js'
 import type { AiResponder, Channel, Conversation, MenuOption, Product, ProductOption, TenantConfig } from '../types.js'
 import {
   detectIntents, findProduct, keywords, parseQuantity, searchKnowledge, similar, splitGreeting, splitItems, type Intent,
@@ -22,11 +23,15 @@ export interface KnowledgeMatcher {
   candidates? (tenant: TenantConfig, text: string): { key: string; title: string; score: number }[]
   /** Resposta de um assunto pela chave "pacote/assunto". */
   answerFor? (tenant: TenantConfig, key: string): KbResult | undefined
+  /** Todas as respostas preenchidas do cliente (contexto da IA funcionária). */
+  faq? (tenant: TenantConfig): { title: string; answer: string }[]
 }
 
 export interface EngineDeps {
   store: Store
   ai?: AiResponder
+  /** IA funcionária: atende tudo e usa ferramentas para o pedido. Sem ela (ou se falhar), valem as regras. */
+  agent?: AgentRunner
   knowledge?: KnowledgeMatcher
   now?: () => Date
   /** Sorteia as variações de frases (fixo nos testes). */
@@ -169,6 +174,11 @@ export class Engine {
     }
 
     if (!text) return [fill(tenant.messages.nonText, tenant, conv, this.now())]
+
+    // IA funcionária: atende a conversa toda; se estiver desligada ou falhar, seguem as regras abaixo
+    const byAgent = await this.agentTurn(tenant, conv)
+    if (byAgent) return byAgent
+
     const bare = n.replace(/[!.?,]+/g, '').trim()
 
     // Resposta a "Quer que eu anote uma pra você?"
@@ -491,6 +501,129 @@ export class Engine {
       return { replies: [`Não tenho certeza se entendi 🤔 Você quis dizer:\n\n${list}\n\nÉ só responder com o número (ou *não*, se for outra coisa).`] }
     }
     return { missingTopic }
+  }
+
+  private agentAvailable (tenant: TenantConfig): boolean {
+    return tenant.ai.enabled && tenant.ai.mode !== 'assist' && Boolean(this.deps.agent)
+  }
+
+  /** Uma vez da IA funcionária: lê a conversa, usa as ferramentas e responde. Undefined = usar as regras. */
+  private async agentTurn (tenant: TenantConfig, conv: Conversation): Promise<string[] | undefined> {
+    if (!this.agentAvailable(tenant)) return undefined
+    const cartBefore = JSON.stringify(conv.cart)
+    const effects = { handoff: '', ordered: false }
+    try {
+      const text = await this.deps.agent!({
+        system: agentPrompt(tenant, conv, this.deps.knowledge?.faq?.(tenant) ?? [], this.now()),
+        messages: agentHistory(conv),
+        tools: AGENT_TOOLS,
+        run: (name, args) => this.agentTool(tenant, conv, name, args, effects),
+      })
+      const replies = [text]
+      // A IA já avisou que vai chamar a equipe: a mensagem padrão só entra se ela não disse nada
+      if (effects.handoff && !text.trim()) replies.push(effects.handoff)
+      conv.lastKind = effects.handoff ? 'handoff' : effects.ordered || JSON.stringify(conv.cart) !== cartBefore ? 'order' : 'ai'
+      if (!effects.handoff) conv.state = conv.cart.length ? 'catalog' : 'menu'
+      const out = replies.filter(r => r.trim())
+      return out.length ? out : undefined
+    } catch (err) {
+      console.error(`[ia] ${tenant.id}: ${err instanceof Error ? err.message : err}`)
+      return undefined
+    }
+  }
+
+  /** Executa uma ferramenta pedida pela IA. O texto devolvido volta para ela. */
+  private agentTool (tenant: TenantConfig, conv: Conversation, name: string, args: Record<string, unknown>, effects: { handoff: string; ordered: boolean }): string {
+    const products = this.activeProducts(tenant)
+    const str = (v: unknown) => (typeof v === 'string' ? v.trim() : typeof v === 'number' ? String(v) : '')
+    const findOne = (ref: string): Product | string => {
+      const n = applySynonyms(tenant, normalize(ref))
+      const byNumber = /^(?:n(?:umero)?\s*)?(\d{1,2})$/.exec(n)
+      if (byNumber) return products[Number(byNumber[1]) - 1] ?? `ERRO: não existe o item ${byNumber[1]} no cardápio.`
+      const exact = products.find(p => normalize(p.name) === n)
+      if (exact) return exact
+      const m = findProduct(products, n)
+      if (m.kind === 'one') return m.product
+      if (m.kind === 'many') return `ERRO: "${ref}" pode ser: ${m.products.map(p => p.name).join(', ')}. Pergunte ao cliente qual.`
+      return `ERRO: "${ref}" não está no cardápio.`
+    }
+    const cartState = () => conv.cart.length
+      ? `Pedido agora: ${conv.cart.map((i, k) => `${k + 1}) ${i.qty}x ${i.name} — ${formatPrice(i.qty * i.price)}`).join('; ')}. Total: ${formatPrice(cartTotal(conv))}.`
+      : 'Pedido vazio.'
+
+    switch (name) {
+      case 'adicionar_item': {
+        const product = findOne(str(args.produto))
+        if (typeof product === 'string') return product
+        const qty = clampQty(Number(args.quantidade) || 1)
+        const extrasText = Array.isArray(args.adicionais) ? args.adicionais.map(str).join(' ') : str(args.adicionais)
+        const extras = extrasText ? matchExtras(product, normalize(extrasText)) : []
+        const sizeText = normalize(str(args.tamanho))
+        const second = str(args.meio_a_meio_com)
+        if (second) {
+          if (tenant.halfHalf === 'off') return 'ERRO: a empresa não faz meio a meio.'
+          const other = findOne(second)
+          if (typeof other === 'string') return other
+          const size = product.sizes?.length ? matchSize(product, sizeText) : undefined
+          if (product.sizes?.length && !size) {
+            return `FALTA TAMANHO: pergunte o tamanho. Opções: ${product.sizes.map(s => `${s.name} ${formatPrice(halfPrice(tenant, product, other, s.name))}`).join(', ')}.`
+          }
+          const label = this.addHalf(tenant, conv, `half:${product.id}:${other.id}`, qty, size?.name)
+          return `OK, anotado: ${label}. ${cartState()}`
+        }
+        let size: ProductOption | undefined
+        if (product.sizes?.length) {
+          size = matchSize(product, sizeText)
+          if (!size) return `FALTA TAMANHO: pergunte qual tamanho da ${product.name}. Opções: ${product.sizes.map(s => `${s.name} ${formatPrice(s.price)}`).join(', ')}.`
+        }
+        const label = this.addToCart(conv, product, qty, size, extras)
+        return `OK, anotado: ${label}. ${cartState()}`
+      }
+      case 'remover_item': {
+        const ref = normalize(str(args.item))
+        const index = /^\d{1,2}$/.test(ref) ? Number(ref) - 1
+          : conv.cart.findIndex(i => normalize(i.name).includes(ref) || keywords(ref).some(w => w.length >= 4 && normalize(i.name).includes(w)))
+        const item = conv.cart[index]
+        if (!item) return `ERRO: esse item não está no pedido. ${cartState()}`
+        const qty = Number(args.quantidade) || item.qty
+        item.qty -= qty
+        if (item.qty <= 0) conv.cart.splice(index, 1)
+        return `OK, removido. ${cartState()}`
+      }
+      case 'ver_pedido':
+        return `${cartState()} Nome: ${conv.checkout.name ?? '(não informado)'}. Entrega: ${conv.checkout.address ?? '(não informado)'}. Pagamento: ${conv.checkout.payment ?? '(não informado)'}.`
+      case 'dados_entrega': {
+        if (str(args.nome)) conv.checkout.name = str(args.nome).slice(0, 80)
+        if (args.retirada === true) conv.checkout.address = 'Retirada no local'
+        else if (str(args.endereco)) conv.checkout.address = str(args.endereco).slice(0, 300)
+        if (str(args.pagamento)) conv.checkout.payment = str(args.pagamento).slice(0, 120)
+        return `OK. Nome: ${conv.checkout.name ?? '(falta)'}. Entrega: ${conv.checkout.address ?? '(falta)'}. Pagamento: ${conv.checkout.payment ?? '(falta)'}.`
+      }
+      case 'confirmar_pedido': {
+        if (!conv.cart.length) return 'ERRO: o pedido está vazio.'
+        if (!conv.checkout.name && conv.name) conv.checkout.name = conv.name
+        if (!conv.checkout.address) return 'ERRO: falta o endereço de entrega (ou confirmar que vai retirar). Pergunte ao cliente.'
+        const total = formatPrice(cartTotal(conv))
+        const message = this.confirmOrder(tenant, conv)
+        effects.ordered = true
+        const number = /#(\d+)/.exec(message)?.[1] ?? ''
+        return `OK, pedido #${number} registrado (total ${total}). Mensagem padrão da empresa para usar: "${message}"`
+      }
+      case 'cancelar_pedido':
+        conv.cart = []
+        conv.checkout = {}
+        return 'OK, pedido cancelado.'
+      case 'chamar_atendente':
+        if (!effects.handoff) effects.handoff = this.handoff(tenant, conv)
+        return 'OK, a equipe foi avisada e vai assumir a conversa. Responda só uma frase curta e não chame outras ferramentas.'
+      case 'informacao_nao_cadastrada': {
+        const asked = str(args.pergunta) || [...conv.messages].reverse().find(m => m.from === 'customer')?.text || ''
+        if (asked) this.deps.knowledge?.logUnanswered(tenant.id, normalize(asked))
+        return 'OK, a empresa foi avisada.'
+      }
+      default:
+        return `ERRO: ferramenta "${name}" não existe.`
+    }
   }
 
   /** Resposta da IA (OpenRouter/Claude), ou undefined se ela estiver desligada ou falhar. */
@@ -1013,7 +1146,7 @@ Quer que eu já anote pra você?`
   private orderSummary (conv: Conversation): string {
     const lines = conv.cart.map(i => `• ${i.qty}x ${i.name} — ${formatPrice(i.qty * i.price)}`)
     return ['📝 *Resumo do pedido*', ...lines, `*Total: ${formatPrice(cartTotal(conv))}*`, '',
-      `Nome: ${conv.checkout.name}`, `Entrega: ${conv.checkout.address}`].join('\n')
+      `Nome: ${conv.checkout.name}`, `Entrega: ${conv.checkout.address}`, ...(conv.checkout.payment ? [`Pagamento: ${conv.checkout.payment}`] : [])].join('\n')
   }
 
   private confirmOrder (tenant: TenantConfig, conv: Conversation): string {
@@ -1023,6 +1156,7 @@ Quer que eu já anote pra você?`
       channel: conv.channel,
       customerName: conv.checkout.name ?? conv.name,
       address: conv.checkout.address ?? '',
+      ...(conv.checkout.payment ? { payment: conv.checkout.payment } : {}),
       items: conv.cart,
       total: cartTotal(conv),
       status: 'novo',

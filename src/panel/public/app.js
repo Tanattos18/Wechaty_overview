@@ -855,7 +855,7 @@ function printOrder (o) {
       .tot { font-size: 15px; font-weight: 700 }
     </style></head><body>
     <h1>${esc(brand)}</h1><div class="c">PEDIDO #${o.number}</div><div class="c">${time(o.createdAt)}</div><hr>
-    <div><b>Cliente:</b> ${esc(o.customerName)}</div><div><b>Entrega:</b> ${esc(o.address)}</div><hr>
+    <div><b>Cliente:</b> ${esc(o.customerName)}</div><div><b>Entrega:</b> ${esc(o.address)}</div>${o.payment ? `<div><b>Pagamento:</b> ${esc(o.payment)}</div>` : ''}<hr>
     <table>${o.items.map(i => `<tr><td>${i.qty}x ${esc(i.name)}</td><td>${money(i.qty * i.price)}</td></tr>`).join('')}</table><hr>
     <table><tr class="tot"><td>TOTAL</td><td>${money(o.total)}</td></tr></table><hr>
     <div class="c">Status: ${esc(ORDER_LABEL[o.status] ?? o.status)}</div>
@@ -1045,7 +1045,17 @@ async function renderConfig () {
 
       <section class="card stack">
         <h3>Inteligência artificial</h3>
-        <label class="check"><input type="checkbox" name="ai.enabled" ${c.ai.enabled ? 'checked' : ''}> Responder perguntas livres com IA (Claude)</label>
+        <label class="check"><input type="checkbox" name="ai.enabled" ${c.ai.enabled ? 'checked' : ''}> Ligar a IA para este cliente</label>
+        <div class="grid2">
+          <label>Como a IA trabalha
+            <select name="ai.mode">
+              <option value="agent" ${c.ai.mode !== 'assist' ? 'selected' : ''}>Atende tudo, como uma funcionária (recomendado)</option>
+              <option value="assist" ${c.ai.mode === 'assist' ? 'selected' : ''}>Só perguntas que o bot não entende</option>
+            </select>
+          </label>
+          <label>Nome da atendente (opcional)<input name="ai.agentName" maxlength="40" placeholder="Ex.: Ana" value="${esc(c.ai.agentName ?? '')}"></label>
+        </div>
+        <p class="muted">Como funcionária, a IA usa tudo o que está cadastrado neste cliente — empresa, cardápio, tamanhos, respostas do Conhecimento e as instruções abaixo — e anota, fecha e cancela pedidos. Preços e totais vêm sempre do sistema. Se a IA ficar fora do ar, o bot volta a responder sozinho pelas regras.</p>
         <label>Instruções extras para a IA<textarea name="ai.instructions" placeholder="Ex.: Trate o cliente por você. Nunca ofereça desconto.">${esc(c.ai.instructions)}</textarea></label>
       </section>
 
@@ -1104,7 +1114,7 @@ async function renderConfig () {
       products: [...form.querySelectorAll('.product-row')].map(productFromRow),
       halfHalf: v('halfHalf').value,
       synonyms: v('synonyms').value,
-      ai: { enabled: v('ai.enabled').checked, instructions: v('ai.instructions').value },
+      ai: { enabled: v('ai.enabled').checked, instructions: v('ai.instructions').value, mode: v('ai.mode').value, agentName: v('ai.agentName').value },
       messages: Object.fromEntries(['welcome', 'fallback', 'humanHandoff', 'humanBack', 'orderConfirmed', 'nonText']
         .map(k => [k, v(`messages.${k}`).value])),
       humanTimeoutMin: v('humanTimeoutMin').value,

@@ -420,6 +420,21 @@ export class KnowledgeBase {
     }, 1)
   }
 
+  /**
+   * Todas as respostas que este cliente tem preenchidas (com as variáveis dele), para a IA consultar.
+   * Assuntos desligados ou sem a informação cadastrada ficam de fora.
+   */
+  faq (tenant: TenantConfig): { title: string; answer: string }[] {
+    const knowledge = tenantKnowledge(tenant)
+    if (knowledge.packs.length === 0) return []
+    const out: { title: string; answer: string }[] = []
+    for (const group of this.index(knowledge.packs).topics) {
+      const r = this.resolve(tenant, group.entries[0], 1)
+      if (r.status === 'answer' && r.answer.trim()) out.push({ title: r.title, answer: r.answer.trim() })
+    }
+    return out
+  }
+
   /** Ensina uma nova forma de perguntar a todos os clientes (grava no pacote). */
   addPackQuestion (key: string, text: string): boolean {
     const [packId, topic] = key.split('/')
