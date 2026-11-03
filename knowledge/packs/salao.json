@@ -1,0 +1,185 @@
+{
+  "id": "salao",
+  "name": "Salão de beleza / Barbearia / Estética",
+  "segment": "beleza",
+  "version": 1,
+  "description": "Serviços, preços, agendamento, remarcação, profissionais, duração, atendimento a domicílio, pacotes e noivas.",
+  "variables": [
+    { "key": "servicos_salao", "label": "Serviços oferecidos", "example": "Corte, escova, coloração, mechas, progressiva, manicure, pedicure, design de sobrancelha e depilação." },
+    { "key": "precos_salao", "label": "Preços dos serviços", "example": "Corte feminino R$ 70, masculino R$ 40, escova R$ 50, manicure R$ 30, progressiva a partir de R$ 180." },
+    { "key": "agendamento_salao", "label": "Como agendar", "example": "Agendamos por aqui! Me diga o serviço, o dia e o horário de preferência (e a profissional, se tiver)." },
+    { "key": "profissionais", "label": "Profissionais", "example": "Nossa equipe: Ana (cabelo), Carla (unhas) e Bruno (barbeiro)." },
+    { "key": "tempo_servicos", "label": "Duração dos serviços", "example": "Corte ~40 min, escova ~50 min, coloração ~2h, progressiva ~3h, manicure ~40 min." },
+    { "key": "politica_cancelamento", "label": "Política de cancelamento e atraso", "example": "Pedimos aviso com 2h de antecedência. Atrasos acima de 15 min podem precisar ser remarcados." },
+    { "key": "domicilio", "label": "Atendimento a domicílio", "example": "Atendemos a domicílio para noivas e eventos, com taxa de deslocamento." },
+    { "key": "produtos_salao", "label": "Produtos que usa/vende", "example": "Trabalhamos com Wella, L'Oréal e Truss, e vendemos os produtos no salão." },
+    { "key": "pacotes_salao", "label": "Pacotes e combos", "example": "Pé e mão por R$ 50 e pacote mensal de escova com 20% de desconto." },
+    { "key": "noivas", "label": "Noivas e eventos", "example": "Fazemos penteado e maquiagem para noivas, madrinhas e debutantes, com teste incluso." },
+    { "key": "publico", "label": "Público atendido", "example": "Atendemos mulheres, homens e crianças a partir de 3 anos." }
+  ],
+  "topics": [
+    {
+      "key": "servicos_salao",
+      "title": "Serviços oferecidos",
+      "category": "Serviços",
+      "answer": "💇 Nossos serviços: {servicos_salao}",
+      "questions": [
+        "quais serviços vocês fazem", "o que vocês fazem", "fazem progressiva", "faz luzes", "faz mechas", "faz coloração",
+        "faz escova", "faz corte feminino", "faz corte masculino", "faz barba", "faz unha", "faz manicure", "faz pedicure",
+        "faz sobrancelha", "design de sobrancelha", "faz depilação", "faz maquiagem", "faz alongamento de unha",
+        "faz unha de gel", "faz botox capilar", "faz hidratação", "faz cílios", "fazem limpeza de pele", "faz platinado"
+      ]
+    },
+    {
+      "key": "precos_salao",
+      "title": "Preços",
+      "category": "Serviços",
+      "answer": "💰 {precos_salao}",
+      "questions": [
+        "quanto é o corte", "quanto custa o corte", "valor da progressiva", "quanto é a escova", "quanto é a manicure",
+        "pé e mão quanto é", "quanto é a sobrancelha", "quanto custa luzes", "preço das mechas", "valor da coloração",
+        "quanto é a barba", "corte e barba quanto", "tabela de preços", "quanto custa a unha de gel", "valor do alongamento",
+        "quanto é a maquiagem", "quanto é a depilação", "preço do botox", "quanto fica pra pintar o cabelo", "quanto é a hidratação",
+        "valores dos serviços"
+      ]
+    },
+    {
+      "key": "agendar_salao",
+      "title": "Agendar horário",
+      "category": "Agendamento",
+      "answer": "📅 {agendamento_salao}",
+      "questions": [
+        "quero agendar", "quero marcar um horário", "agendar corte", "marcar unha", "como faço pra agendar",
+        "quero agendar com a ana", "agendar para sábado", "posso marcar por aqui", "precisa agendar", "atende sem horário marcado",
+        "atende por ordem de chegada", "marcar escova pra sexta", "agendar sobrancelha", "quero marcar progressiva",
+        "agendar barba", "tem agenda pra semana que vem", "marcar pé e mão", "agendamento online", "posso agendar pra minha filha",
+        "como marco horário"
+      ]
+    },
+    {
+      "key": "disponibilidade_hoje",
+      "title": "Tem horário hoje? (encaixe)",
+      "category": "Agendamento",
+      "answer": "Vou verificar a agenda com a equipe e já te respondo! 🗓️",
+      "action": "human",
+      "questions": [
+        "tem horário hoje", "tem vaga hoje", "consegue me encaixar hoje", "tem encaixe", "tem horário agora",
+        "posso ir agora", "tem alguém livre agora", "tem horário amanhã de manhã", "qual o próximo horário livre",
+        "tem horário pra daqui a pouco", "tem vaga pra hoje à tarde", "consigo fazer unha hoje", "tem horário no sábado",
+        "agenda de hoje tem vaga", "tem horário depois das 18h", "consegue hoje ainda", "tem horário mais cedo", "primeiro horário disponível",
+        "tem vaga essa semana", "horários livres"
+      ]
+    },
+    {
+      "key": "remarcar_salao",
+      "title": "Remarcar horário",
+      "category": "Agendamento",
+      "answer": "Claro! Vou chamar alguém da equipe para remarcar seu horário. 📅",
+      "action": "human",
+      "questions": [
+        "quero remarcar", "preciso remarcar meu horário", "mudar meu horário", "trocar o dia do agendamento", "posso mudar a hora",
+        "vou atrasar", "vou chegar atrasada", "vou me atrasar 10 minutos", "dá pra passar pra amanhã", "adiar meu horário",
+        "remarcar unha", "remarcar corte", "consigo trocar de horário", "antecipar meu horário", "posso ir mais tarde",
+        "mudar a profissional", "trocar para outra data", "reagendar", "posso mudar o serviço", "mudar o agendamento"
+      ]
+    },
+    {
+      "key": "cancelar_salao",
+      "title": "Cancelar horário / política",
+      "category": "Agendamento",
+      "answer": "📋 {politica_cancelamento}\n\nVou chamar alguém da equipe para cancelar seu horário.",
+      "action": "human",
+      "questions": [
+        "quero cancelar meu horário", "cancelar agendamento", "não vou poder ir", "desmarcar horário", "preciso desmarcar",
+        "cancela pra mim", "não vou conseguir ir hoje", "cobra se eu faltar", "tem multa por cancelamento", "qual a política de cancelamento",
+        "posso cancelar em cima da hora", "até quando posso cancelar", "faltei no horário", "cancelar a unha",
+        "cancelar o corte", "cancelar sinal", "devolve o sinal", "precisa pagar sinal", "cobram taxa de falta", "desmarca pra mim"
+      ]
+    },
+    {
+      "key": "profissionais",
+      "title": "Profissionais",
+      "category": "Equipe",
+      "answer": "👩‍🎨 {profissionais}",
+      "questions": [
+        "quem são as profissionais", "quais profissionais atendem", "quem faz unha", "quem corta cabelo", "tem barbeiro",
+        "a ana está trabalhando hoje", "quero com a mesma profissional", "quem faz progressiva", "quem é a cabeleireira",
+        "tem especialista em loiro", "tem colorista", "quem faz sobrancelha", "tem maquiadora", "posso escolher a profissional",
+        "a carla atende sábado", "qual profissional você indica", "tem cabeleireiro homem", "equipe do salão", "quem atende hoje", "tem esteticista"
+      ]
+    },
+    {
+      "key": "tempo_servicos",
+      "title": "Duração dos serviços",
+      "category": "Serviços",
+      "answer": "⏱️ {tempo_servicos}",
+      "questions": [
+        "quanto tempo demora a progressiva", "quanto tempo leva o corte", "demora quanto a coloração", "quanto tempo dura a escova",
+        "quanto tempo demora a unha", "pé e mão demora quanto", "quanto tempo leva as luzes", "quanto tempo fico aí",
+        "demora muito", "tempo do procedimento", "quanto tempo dura a sessão", "mechas demora quanto", "unha de gel demora",
+        "quanto tempo pra fazer sobrancelha", "quanto tempo a maquiagem", "duração do atendimento", "leva o dia todo",
+        "dá tempo no horário de almoço", "em quanto tempo fica pronto", "quanto tempo a barba"
+      ]
+    },
+    {
+      "key": "domicilio",
+      "title": "Atendimento a domicílio",
+      "category": "Serviços",
+      "answer": "🏠 {domicilio}",
+      "questions": [
+        "atende a domicílio", "vai em casa", "faz atendimento em casa", "atende em domicílio", "pode vir na minha casa",
+        "maquiagem em casa", "penteado em casa", "manicure em casa", "atende no hotel", "atende em evento",
+        "taxa de deslocamento", "atende fora do salão", "vai até o local da festa", "atendimento delivery", "atende no meu apartamento",
+        "fazem a noiva em casa", "atendem idosos em casa", "corte em casa", "atendimento externo", "atende em outra cidade"
+      ]
+    },
+    {
+      "key": "produtos_salao",
+      "title": "Produtos",
+      "category": "Produtos",
+      "answer": "🧴 {produtos_salao}",
+      "questions": [
+        "quais produtos vocês usam", "que marca vocês usam", "vende produto", "vende shampoo", "tem produto para vender",
+        "a progressiva tem formol", "progressiva sem formol", "usa produto vegano", "qual a marca da tinta", "vende máscara de hidratação",
+        "produto para cabelo cacheado", "tem produto sem química", "posso levar meu produto", "vende esmalte", "tem kit para casa",
+        "qual produto indica", "produto para cabelo loiro", "vende óleo para barba", "tem produto profissional", "a tinta tem amônia"
+      ]
+    },
+    {
+      "key": "pacotes_salao",
+      "title": "Pacotes e combos",
+      "category": "Serviços",
+      "answer": "📦 {pacotes_salao}",
+      "questions": [
+        "tem pacote", "tem combo", "pé e mão tem desconto", "pacote mensal", "plano mensal de barba",
+        "corte e barba tem desconto", "pacote de escova", "assinatura do salão", "tem fidelidade", "clube de assinatura",
+        "pacote de depilação", "pacote de sessões", "combo cabelo e unha", "desconto para pacote", "pacote para mãe e filha",
+        "pacote dia da noiva", "promoção de pacote", "quanto é o pacote", "cartão fidelidade", "pacote semanal"
+      ]
+    },
+    {
+      "key": "noivas",
+      "title": "Noivas, madrinhas e eventos",
+      "category": "Eventos",
+      "answer": "👰 {noivas}",
+      "questions": [
+        "faz noiva", "fazem dia da noiva", "penteado para casamento", "maquiagem para casamento", "faz madrinha",
+        "pacote para noiva", "fazem debutante", "penteado para formatura", "maquiagem para festa", "quanto é o dia da noiva",
+        "tem teste de penteado", "fazem para madrinhas em grupo", "orçamento para casamento", "penteado de festa",
+        "maquiagem social", "penteado infantil para festa", "fazem para dama de honra", "pacote formatura", "agendar para evento", "noiva"
+      ]
+    },
+    {
+      "key": "publico",
+      "title": "Atende homens / crianças?",
+      "category": "Serviços",
+      "answer": "👨‍👩‍👧 {publico}",
+      "questions": [
+        "atende homem", "corta cabelo masculino", "atende criança", "corta cabelo de criança", "atende bebê",
+        "corte infantil", "atende menino", "corte de cabelo para homem", "é só feminino", "é unissex",
+        "faz barba e cabelo", "atende cabelo afro", "atende cabelo cacheado", "faz trança", "faz box braids",
+        "atende idoso", "salão masculino", "atende cabelo crespo", "faz corte de criança com quantos anos", "atende todos os públicos"
+      ]
+    }
+  ]
+}

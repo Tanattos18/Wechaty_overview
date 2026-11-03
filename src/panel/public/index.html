@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Painel ChatBot</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <!-- Login -->
+  <section id="login" class="login hidden">
+    <form id="login-form" class="card login-card">
+      <h1>🤖 Painel ChatBot</h1>
+      <p class="muted">Entre com o ID do seu negócio e a senha.<br>Administrador: use o ID <b>admin</b> (ou deixe em branco).</p>
+      <label>ID do negócio<input name="tenantId" autocomplete="username" placeholder="ex.: pizzaria-bella"></label>
+      <label>Senha<input name="password" type="password" autocomplete="current-password" required></label>
+      <button class="btn primary" type="submit">Entrar</button>
+      <p id="login-error" class="error"></p>
+    </form>
+  </section>
+
+  <!-- App -->
+  <div id="app" class="layout hidden">
+    <aside class="sidebar">
+      <div class="brand">🤖 ChatBot</div>
+      <nav id="nav">
+        <button data-tab="connection">📱 Conexão</button>
+        <button data-tab="chats">💬 Conversas <span id="badge-chats" class="badge hidden"></span></button>
+        <button data-tab="orders">🧾 Pedidos <span id="badge-orders" class="badge hidden"></span></button>
+        <button data-tab="knowledge">📚 Conhecimento <span id="badge-knowledge" class="badge hidden"></span></button>
+        <button data-tab="config">⚙️ Configuração</button>
+        <button data-tab="simulator">🧪 Simulador</button>
+      </nav>
+      <button id="logout" class="btn ghost small">Sair</button>
+    </aside>
+
+    <main class="main">
+      <header class="topbar">
+        <h2 id="title"></h2>
+        <div class="tenant-picker">
+          <select id="tenant-select" aria-label="Cliente"></select>
+          <button id="new-tenant" class="btn small hidden">+ Novo cliente</button>
+        </div>
+      </header>
+      <div id="view" class="view"></div>
+    </main>
+  </div>
+
+  <dialog id="new-tenant-dialog">
+    <form method="dialog" id="new-tenant-form" class="stack">
+      <h3>Novo cliente</h3>
+      <label>Nome do negócio<input name="name" required placeholder="Pizzaria Bella"></label>
+      <label>ID (usado no login)<input name="id" required pattern="[a-z0-9][a-z0-9\-]{1,40}" placeholder="pizzaria-bella"></label>
+      <label>Ramo do negócio
+        <select name="segment">
+          <option value="restaurante">Restaurante / pizzaria / lanchonete</option>
+          <option value="petshop">Pet shop / veterinária</option>
+          <option value="salao">Salão / barbearia / estética</option>
+          <option value="loja">Loja / catálogo</option>
+          <option value="">Outro (só perguntas comuns)</option>
+        </select>
+      </label>
+      <label>Senha do painel do cliente<input name="password" type="password" minlength="8" placeholder="mínimo 8 caracteres"></label>
+      <p class="error" id="new-tenant-error"></p>
+      <div class="row end">
+        <button value="cancel" class="btn ghost" formnovalidate>Cancelar</button>
+        <button value="ok" class="btn primary">Criar</button>
+      </div>
+    </form>
+  </dialog>
+
+  <div id="toast" class="toast hidden"></div>
+  <script src="app.js" type="module"></script>
+</body>
+</html>

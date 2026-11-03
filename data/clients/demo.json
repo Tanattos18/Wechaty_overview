@@ -1,0 +1,111 @@
+{
+  "id": "demo",
+  "name": "Pizzaria Demo",
+  "active": true,
+  "business": {
+    "description": "Pizzaria artesanal com massa de fermentação natural. Aceitamos Pix, cartão de crédito e débito.",
+    "hours": "Terça a domingo, 18h às 23h",
+    "address": "Rua Exemplo, 123 - Centro",
+    "phone": "(81) 99999-0000",
+    "extraInfo": "Entrega em até 45 minutos no Centro e bairros vizinhos. Taxa de entrega: R$ 5,00. Pedido mínimo: R$ 30,00.\nTemos opção sem glúten (massa especial, +R$ 8,00) — consultar disponibilidade com o atendente.\nNão trabalhamos com reservas; o salão tem 12 mesas."
+  },
+  "messages": {
+    "welcome": "{saudacao}, {nome}! 😊 Aqui é da *{empresa}* 🍕 Como posso te ajudar?",
+    "fallback": "Desculpe, não entendi. 🤔",
+    "humanHandoff": "Claro! Vou chamar alguém da equipe pra falar com você. Só um instantinho! 🙋",
+    "humanBack": "Voltei por aqui! 😊",
+    "orderConfirmed": "✅ Pedido *{pedido}* confirmado! Obrigado, {nome}. Já estamos preparando e a entrega leva até 45 minutos. 🛵",
+    "nonText": "Por enquanto eu só consigo ler mensagens de texto. 😅 Pode me escrever o que precisa?"
+  },
+  "menu": [
+    {
+      "key": "1",
+      "label": "Ver cardápio e fazer pedido",
+      "type": "catalog"
+    },
+    {
+      "key": "2",
+      "label": "Horário, endereço e entrega",
+      "type": "text",
+      "text": "🕘 *Horário:* terça a domingo, 18h às 23h\n📍 *Endereço:* Rua Exemplo, 123 - Centro\n🛵 Entrega em até 45 min · Taxa R$ 5,00"
+    },
+    {
+      "key": "3",
+      "label": "Tirar uma dúvida",
+      "type": "ai"
+    },
+    {
+      "key": "4",
+      "label": "Falar com atendente",
+      "type": "human"
+    }
+  ],
+  "products": [
+    {
+      "id": "p1",
+      "name": "Pizza Margherita",
+      "price": 49.9,
+      "description": "Molho de tomate, muçarela e manjericão",
+      "active": true
+    },
+    {
+      "id": "p2",
+      "name": "Pizza Calabresa",
+      "price": 52.9,
+      "description": "Calabresa, cebola e azeitona",
+      "active": true
+    },
+    {
+      "id": "p3",
+      "name": "Pizza Quatro Queijos",
+      "price": 58.9,
+      "description": "Muçarela, provolone, parmesão e gorgonzola",
+      "active": true
+    },
+    {
+      "id": "p4",
+      "name": "Refrigerante 2L",
+      "price": 12,
+      "description": "",
+      "active": true
+    }
+  ],
+  "ai": {
+    "enabled": true,
+    "instructions": "Sugira o cardápio (opção 1 do menu) quando o cliente demonstrar interesse em pedir."
+  },
+  "humanTimeoutMin": 30,
+  "knowledge": {
+    "packs": [
+      "comum",
+      "restaurante"
+    ],
+    "overrides": {},
+    "variables": {
+      "formas_pagamento": "Pix, cartão de crédito, débito e dinheiro",
+      "chave_pix": "pix@pizzariademo.com.br",
+      "parcelamento": "Não parcelamos, mas aceitamos todos os cartões de crédito.",
+      "faz_entrega": "Sim! Temos delivery próprio todos os dias de funcionamento. 🍕",
+      "area_entrega": "Entregamos no Centro e bairros vizinhos (até 5 km).",
+      "taxa_entrega": "R$ 5,00",
+      "tempo_entrega": "até 45 minutos",
+      "pedido_minimo": "R$ 30,00",
+      "retirada": "Pode sim! Faça o pedido por aqui e retire no balcão, sem taxa de entrega.",
+      "estacionamento": "Temos 6 vagas em frente à pizzaria.",
+      "instagram": "@pizzariademo",
+      "promocoes": "Terça é dia de pizza grande + refri 2L por R$ 59,90! 🔥",
+      "feriados": "Nos feriados abrimos normalmente das 18h às 23h. Fechamos apenas no Natal e Ano Novo.",
+      "destaques": "Calabresa, Quatro Queijos e a Margherita da casa.",
+      "opcoes_vegetarianas": "Margherita e Quatro Queijos são vegetarianas. Também fazemos pizza de legumes por encomenda.",
+      "restricoes": "Temos massa sem glúten (+R$ 8,00) — consulte disponibilidade. Para sem lactose, fale com o atendente.",
+      "tamanhos": "Média (6 fatias) e Grande (8 fatias).",
+      "bordas": "Borda recheada de catupiry ou cheddar por +R$ 9,00.",
+      "meio_a_meio": "Pode sim! A pizza meio a meio é cobrada pelo valor do sabor mais caro.",
+      "personalizar": "Pode sim! É só me dizer o que quer tirar ou adicionar que eu anoto no pedido.",
+      "reservas": "Não trabalhamos com reservas — o atendimento no salão é por ordem de chegada (12 mesas).",
+      "bebidas": "Refrigerantes de lata e 2L, sucos naturais e água.",
+      "sobremesas": "Pizza doce de chocolate ou banana com canela (consulte o atendente)."
+    }
+  },
+  "style": "human"
+}

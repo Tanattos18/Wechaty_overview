@@ -1,0 +1,12 @@
+node_modules/
+.env
+
+# Dados gerados em execução (conversas, pedidos, sessões do WhatsApp, banco montado a partir de knowledge/packs)
+data/runtime/
+data/sessions/
+data/knowledge.db*
+.wwebjs_auth/
+.wwebjs_cache/
+
+*.tmp
+.claude/

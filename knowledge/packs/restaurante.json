@@ -1,0 +1,211 @@
+{
+  "id": "restaurante",
+  "name": "Restaurante / Pizzaria / Lanchonete",
+  "segment": "alimentacao",
+  "version": 1,
+  "description": "Cardápio, sabores, restrições alimentares, tamanhos, bordas, reservas, bebidas e encomendas.",
+  "variables": [
+    { "key": "destaques", "label": "Mais pedidos / recomendações", "example": "Calabresa, Quatro Queijos e a Margherita da casa." },
+    { "key": "opcoes_vegetarianas", "label": "Opções vegetarianas / veganas", "example": "Temos 4 sabores vegetarianos e 1 vegano (com queijo vegetal)." },
+    { "key": "restricoes", "label": "Sem glúten / sem lactose", "example": "Temos massa sem glúten (+R$ 8). Para sem lactose, consulte o atendente." },
+    { "key": "tamanhos", "label": "Tamanhos", "example": "Broto (4 fatias), Média (6 fatias) e Grande (8 fatias)." },
+    { "key": "bordas", "label": "Bordas recheadas", "example": "Borda de catupiry, cheddar ou chocolate por +R$ 9." },
+    { "key": "meio_a_meio", "label": "Meio a meio", "example": "Pode sim! Cobramos pelo valor do sabor mais caro." },
+    { "key": "personalizar", "label": "Personalizar pedido (tirar/adicionar)", "example": "Pode sim! É só avisar na observação do pedido o que quer tirar ou adicionar." },
+    { "key": "reservas", "label": "Reservas", "example": "Fazemos reservas para grupos acima de 6 pessoas. Chame o atendente para reservar." },
+    { "key": "bebidas", "label": "Bebidas", "example": "Refrigerantes, sucos naturais, água e cervejas long neck." },
+    { "key": "sobremesas", "label": "Sobremesas", "example": "Pizzas doces, petit gâteau e sorvete." },
+    { "key": "encomendas_eventos", "label": "Encomendas e eventos", "example": "Aceitamos encomendas para festas com 24h de antecedência." },
+    { "key": "taxa_servico", "label": "Taxa de serviço / couvert", "example": "Cobramos 10% de taxa de serviço opcional no salão. Não temos couvert." },
+    { "key": "espaco_kids", "label": "Espaço kids / família", "example": "Temos espaço kids com monitora aos fins de semana." },
+    { "key": "pet_friendly", "label": "Aceita pets?", "example": "Somos pet friendly na área externa! 🐶" }
+  ],
+  "topics": [
+    {
+      "key": "cardapio",
+      "title": "Cardápio",
+      "category": "Cardápio",
+      "answer": "Aqui está nosso cardápio: 🍽️",
+      "action": "catalog",
+      "questions": [
+        "qual o cardápio", "me manda o cardápio", "cardapio por favor", "quais os sabores", "quais sabores tem",
+        "quais os pratos", "o que tem pra comer", "quais as pizzas", "quais lanches tem", "tem quais pizzas",
+        "menu de vcs", "quais opções de comida", "o que tem no cardápio hoje", "manda os sabores", "sabores de pizza",
+        "quais os lanches", "prato do dia", "o que tem hoje pra almoço", "tem marmita", "qual o cardapio de hoje",
+        "lista de sabores", "quero ver o menu"
+      ]
+    },
+    {
+      "key": "mais_pedido",
+      "title": "Mais pedidos / recomendação",
+      "category": "Cardápio",
+      "answer": "⭐ Os mais pedidos da casa: {destaques}",
+      "questions": [
+        "qual o mais pedido", "qual a mais pedida", "o que você recomenda", "qual a melhor pizza", "qual o melhor lanche",
+        "o que vocês indicam", "qual a especialidade da casa", "carro chefe", "qual o prato mais famoso", "me indica uma",
+        "qual sabor sai mais", "qual a mais vendida", "o que é bom aí", "sugestão", "me sugere algo", "qual o mais gostoso",
+        "o que pedir", "não sei o que pedir", "qual vocês recomendam pra primeira vez", "o que é mais famoso ai",
+        "qual o favorito dos clientes"
+      ]
+    },
+    {
+      "key": "vegetariano",
+      "title": "Opções vegetarianas e veganas",
+      "category": "Restrições",
+      "answer": "🥗 {opcoes_vegetarianas}",
+      "questions": [
+        "tem opção vegetariana", "tem prato vegetariano", "tem pizza vegetariana", "tem opção vegana", "tem algo vegano",
+        "sou vegetariano o que posso pedir", "sou vegano", "tem lanche sem carne", "opções sem carne", "tem comida vegana",
+        "tem hamburguer vegano", "tem queijo vegano", "algo plant based", "tem opção sem proteína animal",
+        "pizza sem carne", "o que tem pra vegetariano", "cardapio vegano", "tem opcao veg", "tem salada", "tem opção leve"
+      ]
+    },
+    {
+      "key": "restricoes",
+      "title": "Sem glúten / sem lactose / alergias",
+      "category": "Restrições",
+      "answer": "⚠️ {restricoes}",
+      "questions": [
+        "tem sem glúten", "tem opção sem gluten", "tem massa sem glúten", "sou celíaco", "tem sem lactose",
+        "tem opção sem lactose", "sou intolerante a lactose", "tenho alergia", "tem amendoim", "contém glúten",
+        "contém lactose", "tem opção para alérgicos", "tem diet", "tem opção zero açúcar", "tem low carb",
+        "tem algo pra diabético", "massa integral", "tem frutos do mar", "posso comer sendo alérgico", "sem gluten",
+        "tem opção sem leite"
+      ]
+    },
+    {
+      "key": "tamanhos",
+      "title": "Tamanhos",
+      "category": "Cardápio",
+      "answer": "📏 Tamanhos: {tamanhos}",
+      "questions": [
+        "quais os tamanhos", "qual o tamanho", "quantas fatias", "quantos pedaços tem", "serve quantas pessoas",
+        "tem broto", "tem tamanho família", "tem tamanho grande", "qual o tamanho da grande", "tem pizza pequena",
+        "tem individual", "tem meia porção", "porção serve quantos", "tamanho da média", "quantos cm",
+        "tem gigante", "qual a diferença de tamanho", "pra 2 pessoas qual tamanho", "da pra quantas pessoas", "tamanhos disponiveis"
+      ]
+    },
+    {
+      "key": "bordas",
+      "title": "Bordas recheadas",
+      "category": "Cardápio",
+      "answer": "🧀 {bordas}",
+      "questions": [
+        "tem borda recheada", "quais as bordas", "tem borda de catupiry", "tem borda de cheddar", "borda de chocolate",
+        "quanto é a borda", "valor da borda recheada", "pode colocar borda", "tem borda", "borda de que",
+        "quais bordas tem", "borda recheada é quanto", "tem borda de cream cheese", "borda vem inclusa", "opção de borda",
+        "pizza com borda", "borda doce", "borda salgada", "como é a borda", "acrescentar borda"
+      ]
+    },
+    {
+      "key": "meio_a_meio",
+      "title": "Meio a meio",
+      "category": "Cardápio",
+      "answer": "🍕 {meio_a_meio}",
+      "questions": [
+        "pode ser meio a meio", "faz meio a meio", "pode fazer metade de cada", "dois sabores na mesma pizza",
+        "metade calabresa metade mussarela", "pizza com dois sabores", "da pra misturar sabores", "posso escolher 2 sabores",
+        "meio a meio cobra como", "meio a meio paga o mais caro", "pizza mista", "3 sabores", "faz com três sabores",
+        "quantos sabores posso escolher", "pode juntar dois sabores", "meia meia", "metade de cada sabor",
+        "dá pra pedir meio a meio", "aceita meio a meio", "fazem metade metade"
+      ]
+    },
+    {
+      "key": "personalizar",
+      "title": "Tirar ou adicionar ingredientes",
+      "category": "Pedidos",
+      "answer": "✍️ {personalizar}",
+      "questions": [
+        "pode tirar a cebola", "sem cebola", "pode tirar o tomate", "posso tirar um ingrediente", "posso adicionar ingrediente",
+        "pode colocar mais queijo", "adicional de bacon", "quanto é o adicional", "tem adicional", "pode vir sem azeitona",
+        "dá pra trocar o molho", "pode trocar um ingrediente", "sem pimenta", "pouco sal", "bem passado",
+        "ponto da carne", "posso personalizar", "coloca extra queijo", "tirar a maionese", "pode mandar o molho separado"
+      ]
+    },
+    {
+      "key": "reservas",
+      "title": "Reservas",
+      "category": "Salão",
+      "answer": "📅 {reservas}",
+      "questions": [
+        "faz reserva", "fazem reserva", "quero reservar uma mesa", "posso reservar", "reserva para hoje",
+        "reservar mesa pra 10 pessoas", "precisa de reserva", "aceita reserva", "como faço uma reserva", "mesa para sexta",
+        "reservar para aniversário", "tem mesa disponível", "tem lugar hoje", "reserva pro fim de semana", "quero agendar uma mesa",
+        "cabe grupo grande", "reserva de mesa", "fila de espera", "tem fila", "lugar para 6 pessoas"
+      ]
+    },
+    {
+      "key": "bebidas",
+      "title": "Bebidas",
+      "category": "Cardápio",
+      "answer": "🥤 {bebidas}",
+      "questions": [
+        "quais bebidas tem", "tem refrigerante", "tem coca", "tem suco", "tem suco natural", "tem cerveja",
+        "vende bebida alcoólica", "tem água", "tem vinho", "tem refri de 2 litros", "tem guaraná", "quais sucos tem",
+        "tem drinks", "tem chopp", "tem bebida gelada", "tem refri zero", "tem energético", "bebidas disponíveis",
+        "quanto é a coca", "tem chá gelado"
+      ]
+    },
+    {
+      "key": "sobremesas",
+      "title": "Sobremesas",
+      "category": "Cardápio",
+      "answer": "🍰 {sobremesas}",
+      "questions": [
+        "tem sobremesa", "quais sobremesas", "tem doce", "tem pizza doce", "tem açaí", "tem sorvete",
+        "tem petit gateau", "tem bolo", "sobremesas disponíveis", "tem pudim", "tem brownie", "pizza de chocolate",
+        "tem algo doce", "o que tem de sobremesa", "tem torta", "pizza de brigadeiro", "tem mousse", "doces",
+        "sobremesa do dia", "tem milkshake"
+      ]
+    },
+    {
+      "key": "encomendas_eventos",
+      "title": "Encomendas e eventos",
+      "category": "Pedidos",
+      "answer": "🎉 {encomendas_eventos}",
+      "questions": [
+        "aceita encomenda", "faz encomenda", "quero encomendar para festa", "fazem para eventos", "tem buffet",
+        "faz rodízio em casa", "pizza para festa", "encomenda para aniversário", "pedido grande para empresa",
+        "fazem coffee break", "quantidade grande", "com quanto tempo de antecedência", "agendar pedido para amanhã",
+        "pedido programado", "quero deixar o pedido agendado", "faz salgados para festa", "cardápio para evento",
+        "orçamento para festa", "encomenda para sábado", "fazem marmitas por encomenda"
+      ]
+    },
+    {
+      "key": "taxa_servico",
+      "title": "Taxa de serviço / couvert",
+      "category": "Salão",
+      "answer": "🧾 {taxa_servico}",
+      "questions": [
+        "cobra 10%", "tem taxa de serviço", "cobra couvert", "tem couvert artístico", "taxa de garçom",
+        "os 10% é obrigatório", "cobram taxa no salão", "tem música ao vivo", "couvert é quanto", "tem entrada",
+        "paga pra entrar", "taxa de rolha", "posso levar meu vinho", "consumação mínima no salão", "taxa adicional",
+        "cobra serviço", "tem show hoje", "valor do couvert", "garçom cobra", "tem cobrança de taxa"
+      ]
+    },
+    {
+      "key": "espaco_kids",
+      "title": "Espaço kids / família",
+      "category": "Salão",
+      "answer": "👨‍👩‍👧 {espaco_kids}",
+      "questions": [
+        "tem espaço kids", "tem brinquedoteca", "tem espaço para criança", "tem cardápio infantil", "tem cadeirinha de bebê",
+        "é bom pra levar criança", "tem parquinho", "tem monitora", "tem prato kids", "lugar para família",
+        "aceita criança", "tem trocador", "ambiente familiar", "tem menu kids", "criança paga", "tem área infantil",
+        "pode levar bebê", "tem cadeira alta", "tem recreação", "espaço para crianças brincarem"
+      ]
+    },
+    {
+      "key": "pet_friendly",
+      "title": "Aceita pets?",
+      "category": "Salão",
+      "answer": "🐾 {pet_friendly}",
+      "questions": [
+        "aceita cachorro", "é pet friendly", "posso levar meu cachorro", "pode levar pet", "aceita animais",
+        "posso ir com meu cão", "pode entrar com cachorro", "aceita gato", "tem área pet", "cachorro pode ficar na mesa",
+        "aceitam pets", "pet pode entrar", "levar meu dog", "pode levar animal", "lugar que aceita pet",
+        "ambiente pet friendly", "aceitam cachorro pequeno", "pode cachorro na área externa", "tem água para pet", "posso levar meu gato"
+      ]
+    }
+  ]
+}

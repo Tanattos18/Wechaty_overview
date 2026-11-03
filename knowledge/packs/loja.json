@@ -1,0 +1,193 @@
+{
+  "id": "loja",
+  "name": "Loja / Catálogo / E-commerce",
+  "segment": "varejo",
+  "version": 1,
+  "description": "Tamanhos, medidas, trocas, devolução, frete, prazos, rastreio, estoque, atacado, garantia, cupons e encomendas.",
+  "variables": [
+    { "key": "tamanhos_loja", "label": "Tamanhos disponíveis", "example": "Do P ao GG, e algumas peças em plus size (G1 a G3)." },
+    { "key": "tabela_medidas", "label": "Tabela de medidas", "example": "P: busto 88 cm | M: 94 cm | G: 100 cm | GG: 106 cm. Na dúvida, me passe suas medidas que eu ajudo!" },
+    { "key": "politica_troca", "label": "Política de troca", "example": "Trocas em até 30 dias, com etiqueta e sem sinais de uso. A primeira troca é grátis." },
+    { "key": "devolucao", "label": "Devolução / arrependimento", "example": "Compras online podem ser devolvidas em até 7 dias após o recebimento, com reembolso integral." },
+    { "key": "frete_loja", "label": "Frete e envio", "example": "Enviamos para todo o Brasil pelos Correios e transportadora. Frete grátis acima de R$ 199." },
+    { "key": "prazo_envio", "label": "Prazo de envio", "example": "Postamos em até 2 dias úteis após o pagamento. O prazo dos Correios varia de 3 a 10 dias úteis." },
+    { "key": "rastreio", "label": "Rastreio", "example": "O código de rastreio é enviado por aqui e por e-mail assim que o pedido é postado." },
+    { "key": "loja_fisica", "label": "Loja física / provador", "example": "Temos loja física com provador. Você também pode reservar peças por aqui para provar." },
+    { "key": "atacado", "label": "Atacado / revenda", "example": "Vendemos no atacado a partir de 10 peças com 30% de desconto." },
+    { "key": "garantia", "label": "Garantia", "example": "Todos os produtos têm 90 dias de garantia contra defeito de fabricação." },
+    { "key": "cupom", "label": "Cupons de desconto", "example": "Use o cupom BEMVINDO10 para 10% na primeira compra." },
+    { "key": "encomenda_loja", "label": "Encomendas / reposição", "example": "Se a peça acabou, podemos encomendar. O prazo de reposição é de 7 a 15 dias." },
+    { "key": "personalizacao", "label": "Personalização / presente", "example": "Fazemos embalagem para presente grátis e personalização com nome por +R$ 15." }
+  ],
+  "topics": [
+    {
+      "key": "tamanhos_loja",
+      "title": "Tamanhos disponíveis",
+      "category": "Produtos",
+      "answer": "👕 {tamanhos_loja}",
+      "questions": [
+        "quais os tamanhos", "tem tamanho g", "tem gg", "tem plus size", "tem tamanho grande", "tem p",
+        "tem numeração 38", "tem número 40", "vai até qual tamanho", "tem tamanho infantil", "tem tamanho único",
+        "qual numeração vocês tem", "tem tamanho especial", "tem 44", "tem xg", "tem tamanho pequeno", "veste até qual número",
+        "calçado tem número 37", "grade de tamanhos", "quais numerações"
+      ]
+    },
+    {
+      "key": "tabela_medidas",
+      "title": "Tabela de medidas / qual tamanho escolher",
+      "category": "Produtos",
+      "answer": "📏 {tabela_medidas}",
+      "questions": [
+        "tem tabela de medidas", "qual tamanho eu uso", "qual tamanho devo pedir", "a forma é pequena", "veste grande ou pequeno",
+        "quais as medidas", "medida da peça", "qual o comprimento", "medidas do m", "uso 40 qual tamanho pego",
+        "peso 70kg qual tamanho", "tenho 1,60 qual tamanho", "a calça é de cintura alta", "o tecido estica", "a numeração é normal",
+        "veste certinho", "fica largo", "tabela de numeração", "me ajuda a escolher o tamanho", "a modelagem é justa"
+      ]
+    },
+    {
+      "key": "troca",
+      "title": "Troca",
+      "category": "Pós-venda",
+      "answer": "🔄 {politica_troca}",
+      "questions": [
+        "como faço para trocar", "posso trocar", "qual o prazo de troca", "faz troca", "não serviu posso trocar",
+        "trocar tamanho", "quero trocar por outro", "troca é grátis", "como funciona a troca", "troca na loja física",
+        "comprei online posso trocar na loja", "ficou pequeno", "ficou grande", "trocar a cor", "troca sem etiqueta",
+        "perdi a etiqueta posso trocar", "troca de presente", "ganhei de presente quero trocar", "política de troca", "prazo pra trocar"
+      ]
+    },
+    {
+      "key": "devolucao",
+      "title": "Devolução e reembolso",
+      "category": "Pós-venda",
+      "answer": "↩️ {devolucao}",
+      "questions": [
+        "quero devolver", "como faço para devolver", "posso devolver", "quero meu dinheiro de volta", "reembolso",
+        "como funciona o reembolso", "direito de arrependimento", "desisti da compra", "estorno no cartão", "devolução grátis",
+        "prazo para devolução", "quanto tempo para o estorno", "não gostei quero devolver", "devolver pelo correio",
+        "quem paga o frete da devolução", "cancelar compra e receber de volta", "como peço reembolso", "quero o estorno", "devolução", "posso devolver depois de 7 dias"
+      ]
+    },
+    {
+      "key": "frete_loja",
+      "title": "Frete e envio",
+      "category": "Envio",
+      "answer": "📦 {frete_loja}",
+      "questions": [
+        "envia para todo o brasil", "manda para outro estado", "envia pelos correios", "qual o valor do frete", "tem frete grátis",
+        "frete grátis a partir de quanto", "calcular frete", "quanto fica o frete para são paulo", "envia por sedex", "envia por pac",
+        "tem transportadora", "manda para o nordeste", "envia para fora do brasil", "frete para meu cep", "entrega pelo motoboy",
+        "enviam no mesmo dia", "frete para recife", "qual transportadora", "quanto é o envio", "faz envio"
+      ]
+    },
+    {
+      "key": "prazo_envio",
+      "title": "Prazo de envio",
+      "category": "Envio",
+      "answer": "🗓️ {prazo_envio}",
+      "questions": [
+        "quando vocês enviam", "qual o prazo de envio", "em quanto tempo chega", "quantos dias para chegar", "prazo de entrega",
+        "posta quando", "já postaram meu pedido", "quando sai meu pedido", "demora quantos dias", "chega antes do natal",
+        "prazo dos correios", "quanto tempo para despachar", "chega até sexta", "prazo para minha cidade", "envio imediato",
+        "pronta entrega", "quanto tempo depois do pagamento", "prazo de postagem", "quando chega", "previsão de entrega"
+      ]
+    },
+    {
+      "key": "rastreio",
+      "title": "Rastreio",
+      "category": "Envio",
+      "answer": "🔎 {rastreio}",
+      "questions": [
+        "qual o código de rastreio", "me manda o rastreio", "como rastrear meu pedido", "não recebi o código de rastreio",
+        "rastreamento", "meu pedido está parado", "o rastreio não atualiza", "código dos correios", "onde está minha encomenda",
+        "como acompanho a entrega", "rastreio não funciona", "pedido extraviado", "consta entregue mas não recebi", "meu pacote não chegou",
+        "link de rastreio", "acompanhar envio", "tracking", "status da entrega", "objeto não encontrado", "atualização do rastreio"
+      ]
+    },
+    {
+      "key": "disponibilidade",
+      "title": "Tem em estoque?",
+      "category": "Produtos",
+      "answer": "Vou confirmar a disponibilidade com a equipe e já te respondo! 👀",
+      "action": "human",
+      "questions": [
+        "tem em estoque", "ainda tem", "tem disponível", "tem no tamanho m", "tem na cor preta", "tem dessa cor",
+        "esse modelo ainda tem", "acabou", "vai chegar mais", "quando repõe", "tem pronta entrega", "tem essa peça",
+        "esse da foto tem", "tem outras cores", "tem em azul", "ainda tem esse vestido", "tem esse tênis no 39", "disponível",
+        "tem unidades", "esgotou"
+      ]
+    },
+    {
+      "key": "loja_fisica",
+      "title": "Loja física e provador",
+      "category": "Informações",
+      "answer": "🏬 {loja_fisica}",
+      "questions": [
+        "tem loja física", "posso ir provar", "tem provador", "posso experimentar", "dá pra ver pessoalmente",
+        "reservar para provar", "separar uma peça", "vocês só vendem online", "posso ir na loja", "loja aberta ao público",
+        "tem showroom", "posso buscar na loja", "experimentar antes de comprar", "reserva peça", "separa pra mim",
+        "consigo ver o produto de perto", "tem loja no shopping", "quantas lojas vocês tem", "loja fisica fica onde", "posso conhecer a loja"
+      ]
+    },
+    {
+      "key": "atacado",
+      "title": "Atacado e revenda",
+      "category": "Vendas",
+      "answer": "📦 {atacado}",
+      "questions": [
+        "vende no atacado", "tem preço de atacado", "quero revender", "trabalha com revenda", "quero ser revendedora",
+        "preço para lojista", "atacado a partir de quantas peças", "pedido mínimo atacado", "tem catálogo de atacado", "vende para revenda",
+        "sou lojista", "desconto por quantidade", "compra em grande quantidade", "consignado", "tem kit revendedora",
+        "quero vender seus produtos", "programa de revenda", "tabela atacado", "comprar para revender", "parceria para revenda"
+      ]
+    },
+    {
+      "key": "garantia",
+      "title": "Garantia e defeito",
+      "category": "Pós-venda",
+      "answer": "🛡️ {garantia}",
+      "questions": [
+        "tem garantia", "qual a garantia", "veio com defeito", "o produto estragou", "garantia de quanto tempo",
+        "quebrou com pouco uso", "descosturou", "o produto parou de funcionar", "como aciono a garantia", "defeito de fabricação",
+        "desbotou na primeira lavagem", "o zíper quebrou", "a peça rasgou", "trocam produto com defeito", "a garantia cobre",
+        "produto original", "é original", "tem nota fiscal", "emitem nota fiscal", "certificado de garantia"
+      ]
+    },
+    {
+      "key": "cupom",
+      "title": "Cupom de desconto",
+      "category": "Vendas",
+      "answer": "🎟️ {cupom}",
+      "questions": [
+        "tem cupom", "tem cupom de desconto", "código de desconto", "cupom de primeira compra", "meu cupom não funciona",
+        "onde coloco o cupom", "cupom expirou", "tem desconto para primeira compra", "cupom de frete grátis", "cupom do instagram",
+        "cupom de aniversário", "tem voucher", "como usar o cupom", "cupom válido", "cupom de influencer", "desconto para seguidores",
+        "promocode", "tem cupom hoje", "cupom acumula", "me dá um cupom"
+      ]
+    },
+    {
+      "key": "encomenda_loja",
+      "title": "Encomenda e reposição",
+      "category": "Vendas",
+      "answer": "📝 {encomenda_loja}",
+      "questions": [
+        "faz encomenda", "consegue encomendar", "dá para encomendar no meu tamanho", "quando chega reposição", "vai repor",
+        "me avisa quando chegar", "lista de espera", "tem previsão de chegada", "pode encomendar outra cor", "trabalha sob encomenda",
+        "fazem sob medida", "encomenda personalizada", "quanto tempo demora a encomenda", "pede pra mim", "reserva quando chegar",
+        "chegou novidade", "quando chega a nova coleção", "tem lançamento", "vai ter coleção nova", "aviso de reposição"
+      ]
+    },
+    {
+      "key": "personalizacao",
+      "title": "Presente e personalização",
+      "category": "Vendas",
+      "answer": "🎁 {personalizacao}",
+      "questions": [
+        "faz embalagem de presente", "embrulha para presente", "tem embalagem para presente", "pode mandar com cartão",
+        "é para presente", "pode personalizar com nome", "faz personalização", "pode gravar o nome", "tem caixinha de presente",
+        "manda direto para outra pessoa", "pode enviar para o endereço de outra pessoa", "esconde o preço", "nota sem valor para presente",
+        "bordado com nome", "tem vale presente", "tem gift card", "cartão presente", "kit presente", "embrulho é cobrado", "presente para dia das mães"
+      ]
+    }
+  ]
+}

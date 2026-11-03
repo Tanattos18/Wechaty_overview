@@ -1,0 +1,226 @@
+{
+  "id": "petshop",
+  "name": "Pet shop / Clínica veterinária",
+  "segment": "pet",
+  "version": 1,
+  "description": "Banho e tosa, agendamento, vacinas, veterinário, leva e traz, ração, hospedagem e cuidados.",
+  "variables": [
+    { "key": "servicos_pet", "label": "Serviços oferecidos", "example": "Banho, tosa higiênica, tosa na máquina, tosa na tesoura, hidratação e corte de unhas." },
+    { "key": "precos_banho", "label": "Preços de banho e tosa", "example": "Banho a partir de R$ 50 (porte pequeno), R$ 70 (médio) e R$ 90 (grande). Tosa a partir de R$ 70." },
+    { "key": "agendamento_pet", "label": "Como agendar", "example": "Agendamos por aqui mesmo! Me diga o dia, horário de preferência, nome, raça e porte do pet." },
+    { "key": "vacinas", "label": "Vacinas", "example": "Aplicamos V8, V10, antirrábica e gripe canina. Consulte valores com o atendente." },
+    { "key": "veterinario", "label": "Veterinário / consultas", "example": "Temos veterinário de segunda a sábado. Consulta a partir de R$ 120." },
+    { "key": "leva_e_traz", "label": "Leva e traz", "example": "Temos leva e traz no bairro por R$ 10 (grátis nos pacotes mensais)." },
+    { "key": "racao", "label": "Ração e produtos", "example": "Trabalhamos com Golden, Premier, Royal Canin e outras. Consulte disponibilidade." },
+    { "key": "hospedagem", "label": "Hospedagem / hotelzinho / creche", "example": "Temos hotelzinho com diária a partir de R$ 60 e creche diurna." },
+    { "key": "atende_gatos", "label": "Atende gatos?", "example": "Sim! Atendemos gatos com horário exclusivo para deixá-los mais tranquilos. 🐱" },
+    { "key": "tempo_banho", "label": "Tempo de banho/tosa", "example": "O banho leva cerca de 1h30 e banho com tosa cerca de 2h30." },
+    { "key": "exigencias_pet", "label": "Exigências (vacina, antipulgas)", "example": "Pedimos a carteira de vacinação em dia e o pet sem pulgas." },
+    { "key": "comportamento_pet", "label": "Pets bravos / idosos", "example": "Atendemos pets agitados e idosos com muito cuidado. Se for muito bravo, avise antes para nos prepararmos." },
+    { "key": "adestramento", "label": "Adestramento", "example": "Temos adestrador parceiro. Chame o atendente para saber valores." },
+    { "key": "pacotes_pet", "label": "Pacotes / planos mensais", "example": "Pacote com 4 banhos no mês com 15% de desconto." }
+  ],
+  "topics": [
+    {
+      "key": "banho_tosa",
+      "title": "Banho e tosa / serviços",
+      "category": "Serviços",
+      "answer": "🛁 Nossos serviços: {servicos_pet}",
+      "questions": [
+        "faz banho e tosa", "vocês fazem tosa", "quais serviços vocês fazem", "tem banho", "faz tosa higiênica",
+        "faz tosa na tesoura", "tosa na máquina", "faz hidratação", "corta unha de cachorro", "faz limpeza de ouvido",
+        "escovação de dente", "tosa bebê", "tosa da raça", "faz desembolo", "tira nó do pelo", "banho medicamentoso",
+        "faz banho em gato", "quais os serviços do pet shop", "tosa completa", "banho com perfume", "faz tosa em shih tzu"
+      ]
+    },
+    {
+      "key": "preco_banho",
+      "title": "Preço de banho e tosa",
+      "category": "Serviços",
+      "answer": "💰 {precos_banho}",
+      "questions": [
+        "quanto é o banho", "quanto custa o banho", "valor do banho", "quanto é a tosa", "preço da tosa",
+        "quanto fica banho e tosa", "banho de cachorro pequeno quanto é", "quanto é banho em cachorro grande",
+        "valor da tosa higiênica", "quanto é pra dar banho no meu cachorro", "preço banho shih tzu", "quanto é banho de gato",
+        "tabela de preço do banho", "banho e tosa valor", "quanto custa tosar", "preço do banho porte médio",
+        "quanto é a hidratação", "valor pra cortar unha", "quanto sai o banho", "banho tá quanto"
+      ]
+    },
+    {
+      "key": "agendar_pet",
+      "title": "Agendar banho/tosa",
+      "category": "Agendamento",
+      "answer": "📅 {agendamento_pet}",
+      "questions": [
+        "quero agendar um banho", "quero marcar banho", "agendar tosa", "tem horário pra hoje", "tem vaga amanhã",
+        "como faço pra agendar", "precisa agendar", "posso levar sem agendar", "marcar horário pro meu cachorro",
+        "agendar banho pra sábado", "tem horário disponível", "quero marcar um horário", "agenda de vcs", "quais horários tem",
+        "consigo encaixe hoje", "agendamento", "marcar tosa pra sexta", "quero deixar meu cachorro pra banho", "posso agendar por aqui",
+        "agendar para o meu gato"
+      ]
+    },
+    {
+      "key": "vacinas",
+      "title": "Vacinas",
+      "category": "Saúde",
+      "answer": "💉 {vacinas}",
+      "questions": [
+        "vocês vacinam", "tem vacina", "aplica vacina", "vacina v10", "vacina v8", "vacina antirrábica",
+        "vacina de raiva", "quanto é a vacina", "vacina pra filhote", "vacina de gato", "v4 para gato", "vacina da gripe canina",
+        "protocolo de vacina", "quando vacinar filhote", "tem vermífugo", "aplica vermífugo", "vacina de giardia",
+        "preciso vacinar meu cachorro", "valor da vacina", "vacinação"
+      ]
+    },
+    {
+      "key": "veterinario",
+      "title": "Veterinário / consultas",
+      "category": "Saúde",
+      "answer": "🩺 {veterinario}",
+      "questions": [
+        "tem veterinário", "tem veterinario hoje", "quanto é a consulta", "quero marcar consulta", "consulta veterinária",
+        "meu cachorro está doente", "meu cachorro não quer comer", "meu gato está vomitando", "faz exame", "faz castração",
+        "quanto é a castração", "faz cirurgia", "faz ultrassom", "tem clínica", "atende consulta", "veterinário atende que horas",
+        "meu pet está com diarreia", "faz exame de sangue", "faz microchip", "veterinario de plantão"
+      ]
+    },
+    {
+      "key": "emergencia_pet",
+      "title": "Emergência",
+      "category": "Saúde",
+      "answer": "🚨 Entendi, é urgente! Vou chamar alguém da equipe agora mesmo. Se for grave, procure também o pronto-socorro veterinário mais próximo.",
+      "action": "human",
+      "questions": [
+        "é uma emergência", "emergência veterinária", "meu cachorro foi atropelado", "meu cachorro está passando mal",
+        "meu gato está muito mal", "meu pet comeu veneno", "meu cachorro está convulsionando", "urgente meu cachorro",
+        "meu cachorro foi mordido", "está sangrando muito", "não consegue respirar", "engoliu um objeto",
+        "pronto socorro veterinário", "atendimento 24 horas", "socorro meu cachorro", "meu pet desmaiou", "intoxicação",
+        "meu gato caiu da janela", "emergencia", "atende emergência agora"
+      ]
+    },
+    {
+      "key": "leva_e_traz",
+      "title": "Leva e traz",
+      "category": "Serviços",
+      "answer": "🚐 {leva_e_traz}",
+      "questions": [
+        "tem leva e traz", "vocês buscam o cachorro", "buscam em casa", "fazem busca e entrega", "taxi dog",
+        "tem transporte pet", "podem buscar meu pet", "quanto é o leva e traz", "busca no meu bairro", "levam de volta",
+        "tem van pet", "pegam e entregam o pet", "transporte do animal", "buscam e trazem", "o leva e traz é grátis",
+        "vocês vão buscar", "tem busca em casa", "leva e traz pra gato", "busca o pet que horas", "taxi pet"
+      ]
+    },
+    {
+      "key": "racao",
+      "title": "Ração e produtos",
+      "category": "Produtos",
+      "answer": "🦴 {racao}",
+      "questions": [
+        "vende ração", "tem ração", "quais rações vocês tem", "tem golden", "tem premier", "tem royal canin",
+        "tem ração de gato", "tem areia de gato", "tem petisco", "vende brinquedo", "tem coleira", "tem caminha",
+        "tem antipulgas", "vende remédio", "tem bravecto", "tem nexgard", "tem tapete higiênico", "entrega ração",
+        "preço da ração", "tem ração para filhote", "tem sachê"
+      ]
+    },
+    {
+      "key": "hospedagem",
+      "title": "Hospedagem / hotelzinho / creche",
+      "category": "Serviços",
+      "answer": "🏨 {hospedagem}",
+      "questions": [
+        "tem hotelzinho", "tem hospedagem", "hotel para cachorro", "vou viajar onde deixo meu cachorro", "tem creche",
+        "creche para cachorro", "day care", "quanto é a diária", "pode ficar o fim de semana", "hospedagem para gato",
+        "deixar o pet durante o dia", "tem pet sitter", "cuida do cachorro enquanto viajo", "hotel pet", "diária do hotelzinho",
+        "hospedagem no natal", "creche diária", "tem vaga no hotel", "pode dormir ai", "quanto é para ficar uma semana"
+      ]
+    },
+    {
+      "key": "atende_gatos",
+      "title": "Atende gatos?",
+      "category": "Serviços",
+      "answer": "🐱 {atende_gatos}",
+      "questions": [
+        "atende gato", "vocês atendem gatos", "dá banho em gato", "tosa em gato", "faz tosa de gato",
+        "gato pode", "meu gato é bravo", "tem horário para gato", "gatos são separados dos cachorros", "corta unha de gato",
+        "atende felino", "banho em gato persa", "tosa leão gato", "pet shop para gato", "atendem outros animais",
+        "atende coelho", "atende pássaro", "atende hamster", "atende animais exóticos", "meu gato tem medo de cachorro"
+      ]
+    },
+    {
+      "key": "tempo_banho",
+      "title": "Tempo do banho/tosa",
+      "category": "Serviços",
+      "answer": "⏱️ {tempo_banho}",
+      "questions": [
+        "quanto tempo demora o banho", "demora quanto o banho", "quanto tempo leva a tosa", "que horas fica pronto",
+        "posso esperar", "tempo do banho e tosa", "quanto tempo meu cachorro fica ai", "fica pronto que horas",
+        "demora muito a tosa", "tempo médio do banho", "quanto tempo para buscar", "deixo de manhã e pego que horas",
+        "em quanto tempo fica pronto", "banho demora", "precisa ficar o dia todo", "vocês avisam quando fica pronto",
+        "quanto tempo pra secar", "duração do banho", "posso aguardar no local", "fica quanto tempo"
+      ]
+    },
+    {
+      "key": "exigencias_pet",
+      "title": "Exigências (vacinação, pulgas)",
+      "category": "Regras",
+      "answer": "📋 {exigencias_pet}",
+      "questions": [
+        "precisa de carteira de vacinação", "precisa estar vacinado", "meu cachorro não tem vacina pode", "precisa levar algo",
+        "o que preciso levar", "tem alguma exigência", "aceita com pulga", "meu cachorro tem pulga pode tomar banho",
+        "filhote sem vacina pode", "precisa estar vermifugado", "tem regra para atendimento", "precisa de coleira",
+        "precisa de focinheira", "meu cachorro está no cio pode", "cadela no cio pode tomar banho", "precisa levar a ração",
+        "precisa levar shampoo", "levo a carteirinha", "documento do pet", "requisitos para o banho"
+      ]
+    },
+    {
+      "key": "comportamento_pet",
+      "title": "Pets bravos, idosos ou ansiosos",
+      "category": "Regras",
+      "answer": "🐕 {comportamento_pet}",
+      "questions": [
+        "meu cachorro é bravo", "atende cachorro bravo", "meu cachorro morde", "meu cachorro é agressivo", "meu cachorro é muito agitado",
+        "atende cachorro idoso", "meu cachorro é velhinho", "meu cachorro tem medo do secador", "ele é muito ansioso",
+        "meu pet tem problema de saúde pode tomar banho", "cachorro cardíaco", "meu cachorro é medroso", "atende pit bull",
+        "atende rottweiler", "cachorro grande pode", "meu cachorro não gosta de banho", "usam sedação", "fica junto com outros cachorros",
+        "meu cachorro é reativo", "atende pet especial"
+      ]
+    },
+    {
+      "key": "adestramento",
+      "title": "Adestramento",
+      "category": "Serviços",
+      "answer": "🎓 {adestramento}",
+      "questions": [
+        "tem adestramento", "faz adestramento", "adestrador", "quanto é o adestramento", "meu cachorro não obedece",
+        "ensinar xixi no lugar certo", "meu cachorro puxa a coleira", "adestramento de filhote", "aula de adestramento",
+        "socialização de cachorro", "meu cachorro late muito", "adestramento em casa", "curso para cachorro",
+        "comportamento canino", "ensinar comandos", "meu cachorro destrói tudo", "adestramento para cachorro bravo",
+        "tem passeador", "dog walker", "passeio com cachorro"
+      ]
+    },
+    {
+      "key": "pacotes_pet",
+      "title": "Pacotes e planos mensais",
+      "category": "Serviços",
+      "answer": "📦 {pacotes_pet}",
+      "questions": [
+        "tem pacote de banho", "tem plano mensal", "pacote mensal", "pacote com desconto", "assinatura de banho",
+        "4 banhos por mês", "pacote semanal", "plano para cachorro", "tem fidelidade", "pacote de tosa",
+        "quanto é o pacote", "como funciona o pacote", "banho toda semana", "plano pet", "mensalidade do banho",
+        "tem cartão fidelidade", "a cada 10 banhos ganha um", "desconto para cliente fixo", "pacote quinzenal", "combo de banhos"
+      ]
+    },
+    {
+      "key": "remarcar_pet",
+      "title": "Remarcar ou cancelar agendamento",
+      "category": "Agendamento",
+      "answer": "Sem problemas! Vou chamar alguém da equipe para remarcar ou cancelar seu horário. 📅",
+      "action": "human",
+      "questions": [
+        "quero remarcar o banho", "preciso desmarcar", "cancelar o agendamento", "mudar o horário do banho",
+        "não vou conseguir ir hoje", "posso trocar o dia", "remarcar tosa", "vou atrasar", "vou chegar atrasado",
+        "desmarcar horário", "trocar o horário", "adiar o banho", "posso ir mais tarde", "cancela meu horário",
+        "remarcar para amanhã", "vou precisar cancelar", "mudar a data", "não consigo levar hoje", "reagendar", "posso antecipar o horário"
+      ]
+    }
+  ]
+}
