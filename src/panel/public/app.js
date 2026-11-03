@@ -855,7 +855,7 @@ function printOrder (o) {
       .tot { font-size: 15px; font-weight: 700 }
     </style></head><body>
     <h1>${esc(brand)}</h1><div class="c">PEDIDO #${o.number}</div><div class="c">${time(o.createdAt)}</div><hr>
-    <div><b>Cliente:</b> ${esc(o.customerName)}</div><div><b>Entrega:</b> ${esc(o.address)}</div>${o.payment ? `<div><b>Pagamento:</b> ${esc(o.payment)}</div>` : ''}<hr>
+    <div><b>Cliente:</b> ${esc(o.customerName)}</div><div><b>Entrega:</b> ${esc(o.address)}</div>${o.payment ? `<div><b>Pagamento:</b> ${esc(o.payment)}</div>` : ''}${o.deliveryFee ? `<div><b>Taxa de entrega:</b> ${money(o.deliveryFee)}</div>` : ''}<hr>
     <table>${o.items.map(i => `<tr><td>${i.qty}x ${esc(i.name)}</td><td>${money(i.qty * i.price)}</td></tr>`).join('')}</table><hr>
     <table><tr class="tot"><td>TOTAL</td><td>${money(o.total)}</td></tr></table><hr>
     <div class="c">Status: ${esc(ORDER_LABEL[o.status] ?? o.status)}</div>

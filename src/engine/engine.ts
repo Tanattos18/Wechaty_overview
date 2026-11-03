@@ -48,7 +48,7 @@ const YES = new Set([
   'aham', 'beleza', 'fechado', 'perfeito', 'com certeza',
 ])
 const NO = new Set(['nao', 'n', 'nn', 'agora nao', 'nao obrigado', 'nao obrigada', 'depois', 'deixa', 'deixa pra la', 'ainda nao', 'nao quero'])
-const FINISH_RE = /^(finalizar|fechar|fechar pedido|pode fechar|so isso|e so isso|so isso mesmo|so|pronto|concluir|nada mais|mais nada|nao so isso|e so|acabou)$/
+const FINISH_RE = /^(finalizar|fechar|fechar pedido|pode fechar|pode finalizar|so isso|e so isso|so isso mesmo|isso|e isso|isso ai|isso mesmo|so|pronto|concluir|nada mais|mais nada|nao so isso|e so|acabou)$/
 const PICKUP_RE = /\b(retirar|retiro|retirada|buscar|busco|vou buscar|pego ai|pegar ai)\b/
 const HOW_ARE_YOU_RE = /tudo (bem|bom|certo|joia)|td bem|como vai|blz|beleza/
 const TOTAL_RE = /\b(quanto (deu|ficou|vai dar|vai ficar)|quanto (e|ta|esta|fica) (tudo|o total|meu pedido|o pedido)|quanto (eu )?(devo|vou) pagar|quanto devo|valor total|total do (meu )?pedido|qual (e )?o total|quanto custa tudo|deu quanto|ficou (em )?quanto)\b/
@@ -234,6 +234,7 @@ export class Engine {
       if (/👍|👌|🙏|❤|😊|🙂|😉/u.test(text)) return ['😊 Qualquer coisa, é só chamar!']
       if (conv.state === 'checkout_name') return ['Pra finalizar, me diz o seu nome? 😊']
       if (conv.state === 'checkout_address') return ['Qual o endereço de entrega? Se preferir retirar aqui, é só dizer *retirar*.']
+      if (conv.state === 'checkout_payment') return [this.nextCheckoutStep(tenant, conv)]
       if (conv.state === 'checkout_confirm') return ['É só me responder *sim* pra confirmar ou *cancelar* se quiser desistir. 😊']
       if (conv.state === 'catalog' && conv.cart.length > 0) return [`Ficou alguma dúvida? 😊\n\n${this.cartText(conv)}`]
       if (conv.state === 'catalog') return [this.orderHelp(tenant)]
@@ -250,15 +251,13 @@ export class Engine {
         if (/\d/.test(bare) && ADDRESS_RE.test(bare) && conv.name) {
           conv.checkout.name = conv.name.slice(0, 80)
           conv.checkout.address = text.slice(0, 300)
-          conv.state = 'checkout_confirm'
-          return [`Confere pra mim, por favor:\n\n${this.orderSummary(conv)}\n\nPosso confirmar? (responda *sim* ou *cancelar*)`]
+          return [this.nextCheckoutStep(tenant, conv, 'Anotado! ')]
         }
         conv.checkout.name = confirms && conv.name
           ? conv.name.slice(0, 80)
           : text.replace(/^(meu nome (e|é)|me chamo|sou o|sou a|e|é|nao,?|não,?)\s+/i, '').slice(0, 80)
-        conv.state = 'checkout_address'
         const first = firstName(conv)
-        return [`Prazer${first ? `, ${first}` : ''}! 😊 Qual o endereço de entrega? Se preferir retirar aqui, é só dizer *retirar*.`]
+        return [this.nextCheckoutStep(tenant, conv, `Prazer${first ? `, ${first}` : ''}! 😊 `)]
       }
 
       case 'checkout_address':
@@ -283,11 +282,21 @@ export class Engine {
           }
           conv.checkout.address = text.slice(0, 300)
         }
-        conv.state = 'checkout_confirm'
-        return [`Confere pra mim, por favor:\n\n${this.orderSummary(conv)}\n\nPosso confirmar? (responda *sim* ou *cancelar*)`]
+        return [this.nextCheckoutStep(tenant, conv, 'Anotado! ')]
+
+      case 'checkout_payment': {
+        const ask = this.readPayment(tenant, conv, bare, text)
+        return [ask ?? this.nextCheckoutStep(tenant, conv)]
+      }
 
       case 'checkout_confirm':
         if (YES.has(bare)) return [this.confirmOrder(tenant, conv)]
+        // Trocou a forma de pagamento na hora de confirmar ("na verdade vou pagar no cartão")
+        if (paymentMethod(bare)) {
+          conv.checkout.payment = undefined
+          const ask = this.readPayment(tenant, conv, bare, text)
+          return [ask ?? this.nextCheckoutStep(tenant, conv, 'Trocado! ')]
+        }
         if (NO.has(bare)) {
           conv.state = 'catalog'
           return [`Sem problemas! O que você quer mudar? Pode adicionar mais itens ou digitar *cancelar* pra desistir.\n\n${this.cartText(conv)}`]
@@ -394,6 +403,11 @@ export class Engine {
     const products = this.activeProducts(tenant)
     const match = findProduct(products, n)
     const wantsOthers = OTHER_OPTIONS_RE.test(n)
+
+    if (/\b(cardapio|catalogo)\b/.test(n) && n.split(' ').length <= 6 && !has('order') && match.kind === 'none' && !wantsOthers) {
+      conv.state = 'catalog'
+      return { replies: [this.pick(PHRASES.catalogIntro), this.catalogText(tenant, conv)] }
+    }
 
     // Logo depois de mostrar a promoção: "teria outras?", "só tem essa?" falam da promoção, não do cardápio
     if (this.recentTopic(conv) === 'promocoes' && !REF_ORDER_RE.test(n) && (wantsOthers || ONLY_THIS_RE.test(n) || (PROMO_RE.test(n) && !has('order')))) {
@@ -590,8 +604,11 @@ export class Engine {
         if (item.qty <= 0) conv.cart.splice(index, 1)
         return `OK, removido. ${cartState()}`
       }
-      case 'ver_pedido':
-        return `${cartState()} Nome: ${conv.checkout.name ?? '(não informado)'}. Entrega: ${conv.checkout.address ?? '(não informado)'}. Pagamento: ${conv.checkout.payment ?? '(não informado)'}.`
+      case 'ver_pedido': {
+        const { fee, feeNote, total } = this.checkoutTotals(tenant, conv)
+        const totals = fee ? ` Taxa de entrega: ${formatPrice(fee)}. Total com entrega: ${formatPrice(total)}.` : feeNote ? ` Taxa de entrega: ${feeNote}.` : ''
+        return `${cartState()}${totals} Nome: ${conv.checkout.name ?? '(não informado)'}. Entrega: ${conv.checkout.address ?? '(não informado)'}. Pagamento: ${conv.checkout.payment ?? '(não informado)'}.`
+      }
       case 'dados_entrega': {
         if (str(args.nome)) conv.checkout.name = str(args.nome).slice(0, 80)
         if (args.retirada === true) conv.checkout.address = 'Retirada no local'
@@ -603,7 +620,10 @@ export class Engine {
         if (!conv.cart.length) return 'ERRO: o pedido está vazio.'
         if (!conv.checkout.name && conv.name) conv.checkout.name = conv.name
         if (!conv.checkout.address) return 'ERRO: falta o endereço de entrega (ou confirmar que vai retirar). Pergunte ao cliente.'
-        const total = formatPrice(cartTotal(conv))
+        if (!conv.checkout.payment) return 'ERRO: falta a forma de pagamento. Pergunte ao cliente antes de confirmar.'
+        const min = moneyVar(tenant, 'pedido_minimo')
+        if (min && cartTotal(conv) < min) return `ERRO: o pedido mínimo é ${formatPrice(min)} e o pedido está em ${formatPrice(cartTotal(conv))}.`
+        const total = formatPrice(this.checkoutTotals(tenant, conv).total)
         const message = this.confirmOrder(tenant, conv)
         effects.ordered = true
         const number = /#(\d+)/.exec(message)?.[1] ?? ''
@@ -831,14 +851,15 @@ Quer que eu já anote pra você?`
   private handleCatalog (tenant: TenantConfig, conv: Conversation, n: string, raw = n): string | undefined {
     if (/^(carrinho|meu pedido|pedido|ver carrinho|ver pedido)$/.test(n)) return this.cartText(conv)
     if (n === 'catalogo' || n === 'cardapio') return this.catalogText(tenant, conv)
+    // "sim" depois de "Quer mais alguma coisa?": quer pedir mais
+    if (YES.has(n) && conv.cart.length > 0 && !FINISH_RE.test(n)) return 'Claro! O que mais vai querer? 😊'
     if (FINISH_RE.test(n) || (NO.has(n) && conv.cart.length > 0)) {
       if (conv.cart.length === 0) return 'Seu pedido ainda está vazio. Me diga o que você quer que eu anoto! 😊'
-      conv.state = 'checkout_name'
-      // Já sabemos o nome pelo WhatsApp: só confirma, em vez de perguntar de novo
-      const known = firstName({ ...conv, checkout: {} })
-      return known
-        ? `Ótimo! Posso colocar o pedido no nome de *${known}*? Responda *sim* ou me diga o nome certo. 😊`
-        : this.pick(PHRASES.askName)
+      const min = moneyVar(tenant, 'pedido_minimo')
+      if (min && cartTotal(conv) < min) {
+        return `O pedido mínimo é *${formatPrice(min)}* e o seu está em *${formatPrice(cartTotal(conv))}* 😊 Quer adicionar mais alguma coisa?`
+      }
+      return this.nextCheckoutStep(tenant, conv, 'Ótimo! ')
     }
     // Com o catálogo na tela, números se referem aos itens da lista: "1 e 4", "quero a 2", "duas da 3".
     // Nomes de produto seguem pelo fluxo normal, que separa pedido de pergunta ("a calabresa é apimentada?").
@@ -1143,27 +1164,110 @@ Quer que eu já anote pra você?`
       this.pick(PHRASES.cartFooter)].join('\n')
   }
 
-  private orderSummary (conv: Conversation): string {
+  /**
+   * Fechamento sempre na mesma ordem, um passo por mensagem:
+   * 1. nome → 2. entrega (endereço) ou retirada → 3. forma de pagamento (e troco) → 4. resumo para confirmar.
+   * Pergunta só o que ainda falta, então o cliente pode adiantar dados sem repetir.
+   */
+  private nextCheckoutStep (tenant: TenantConfig, conv: Conversation, prefix = ''): string {
+    if (!conv.checkout.name) {
+      conv.state = 'checkout_name'
+      // Já sabemos o nome pelo WhatsApp: só confirma, em vez de perguntar de novo
+      const known = firstName(conv)
+      return known
+        ? `${prefix}Posso colocar o pedido no nome de *${known}*? Responda *sim* ou me diga o nome certo. 😊`
+        : `${prefix}${this.pick(PHRASES.askName)}`
+    }
+    if (!conv.checkout.address) {
+      conv.state = 'checkout_address'
+      return `${prefix}Qual o endereço de entrega (rua, número e bairro)? Se preferir retirar aqui, é só dizer *retirar*.`
+    }
+    if (!conv.checkout.payment) {
+      conv.state = 'checkout_payment'
+      const methods = tenantVar(tenant, 'formas_pagamento')
+      return `${prefix}Como vai ser o pagamento?${methods ? ` Aceitamos *${methods}*.` : ' Pix, cartão ou dinheiro?'}`
+    }
+    conv.state = 'checkout_confirm'
+    return `${prefix}Confere pra mim, por favor:\n\n${this.orderSummary(tenant, conv)}\n\nPosso confirmar? (responda *sim* ou *cancelar*)`
+  }
+
+  /** Lê a forma de pagamento. Retorna a próxima pergunta (troco, forma não aceita) ou undefined quando já anotou. */
+  private readPayment (tenant: TenantConfig, conv: Conversation, bare: string, text: string): string | undefined {
+    const methods = tenantVar(tenant, 'formas_pagamento')
+    const money = (s: string) => /(\d+(?:[.,]\d{1,2})?)/.exec(s)?.[1]
+    if (conv.checkout.askChange) {
+      conv.checkout.askChange = false
+      const value = money(bare)
+      conv.checkout.payment = value ? `Dinheiro (troco para ${formatPrice(Number(value.replace(',', '.')))})` : 'Dinheiro (sem troco)'
+      return undefined
+    }
+    const method = paymentMethod(bare)
+    if (!method) {
+      const tries = conv.checkout.paymentTries ?? 0
+      if (tries < 2) {
+        conv.checkout.paymentTries = tries + 1
+        return `Não entendi a forma de pagamento 😅${methods ? ` Aceitamos *${methods}*.` : ''} Qual você prefere?`
+      }
+      conv.checkout.payment = text.slice(0, 120)
+      return undefined
+    }
+    if (methods && !acceptsPayment(methods, method)) return `Infelizmente não aceitamos ${method.toLowerCase()} 😕 Aceitamos *${methods}*. Qual você prefere?`
+    if (method === 'Dinheiro') {
+      const value = /troco\s*(?:pra|para|de)?\s*(?:r\$\s*)?(\d+(?:[.,]\d{1,2})?)/.exec(bare)?.[1]
+      if (value) conv.checkout.payment = `Dinheiro (troco para ${formatPrice(Number(value.replace(',', '.')))})`
+      else if (/sem troco|nao (precisa|preciso) (de )?troco|troco nao/.test(bare)) conv.checkout.payment = 'Dinheiro (sem troco)'
+      else {
+        conv.checkout.askChange = true
+        return 'Vai precisar de troco? Se sim, pra quanto? 😊'
+      }
+      return undefined
+    }
+    conv.checkout.payment = method
+    return undefined
+  }
+
+  /** Subtotal dos itens, taxa de entrega (só quando cadastrada como valor e não é retirada) e total. */
+  private checkoutTotals (tenant: TenantConfig, conv: Conversation): { subtotal: number; fee: number; feeNote: string; total: number } {
+    const subtotal = cartTotal(conv)
+    const delivery = Boolean(conv.checkout.address) && conv.checkout.address !== 'Retirada no local'
+    const raw = tenantVar(tenant, 'taxa_entrega')
+    const fee = delivery ? moneyVar(tenant, 'taxa_entrega') : 0
+    // Taxa escrita como texto ("R$ 5 no centro, R$ 8 nos bairros"): mostra, mas não soma
+    const feeNote = delivery && !fee && raw ? raw : ''
+    return { subtotal, fee, feeNote, total: round2(subtotal + fee) }
+  }
+
+  private orderSummary (tenant: TenantConfig, conv: Conversation): string {
     const lines = conv.cart.map(i => `• ${i.qty}x ${i.name} — ${formatPrice(i.qty * i.price)}`)
-    return ['📝 *Resumo do pedido*', ...lines, `*Total: ${formatPrice(cartTotal(conv))}*`, '',
+    const { subtotal, fee, feeNote, total } = this.checkoutTotals(tenant, conv)
+    const totals = fee
+      ? [`Subtotal: ${formatPrice(subtotal)}`, `Taxa de entrega: ${formatPrice(fee)}`, `*Total: ${formatPrice(total)}*`]
+      : [`*Total: ${formatPrice(total)}*`, ...(feeNote ? [`Taxa de entrega: ${feeNote}`] : [])]
+    return ['📝 *Resumo do pedido*', ...lines, ...totals, '',
       `Nome: ${conv.checkout.name}`, `Entrega: ${conv.checkout.address}`, ...(conv.checkout.payment ? [`Pagamento: ${conv.checkout.payment}`] : [])].join('\n')
   }
 
   private confirmOrder (tenant: TenantConfig, conv: Conversation): string {
     const at = this.now().toISOString()
+    const { fee, total } = this.checkoutTotals(tenant, conv)
+    const payment = conv.checkout.payment ?? ''
     const order = this.deps.store.addOrder(tenant.id, {
       chatId: conv.chatId,
       channel: conv.channel,
       customerName: conv.checkout.name ?? conv.name,
       address: conv.checkout.address ?? '',
-      ...(conv.checkout.payment ? { payment: conv.checkout.payment } : {}),
+      ...(payment ? { payment } : {}),
+      ...(fee ? { deliveryFee: fee } : {}),
       items: conv.cart,
-      total: cartTotal(conv),
+      total,
       status: 'novo',
       createdAt: at,
       updatedAt: at,
     })
-    const reply = fill(tenant.messages.orderConfirmed, tenant, conv, this.now()).replaceAll('{pedido}', `#${order.number}`)
+    let reply = fill(tenant.messages.orderConfirmed, tenant, conv, this.now()).replaceAll('{pedido}', `#${order.number}`)
+    // Pagamento no Pix: já manda a chave
+    const pix = tenantVar(tenant, 'chave_pix')
+    if (/pix/i.test(payment) && pix) reply += `\n\nPra pagar no Pix, a chave é *${pix}* (total *${formatPrice(total)}*). Depois é só mandar o comprovante por aqui 😉`
     conv.cart = []
     conv.checkout = {}
     conv.state = 'menu'
@@ -1173,7 +1277,7 @@ Quer que eu já anote pra você?`
 }
 
 const QTY_WORD = '\\d{1,2}|um|uma|dois|duas|tres|quatro|cinco|seis|sete|oito|nove|dez'
-const ORDER_FILLER_RE = /\b(ta|ok|okay|beleza|blz|entao|certo|hmm|hum|tudo bem|bom|quero|queria|vou querer|gostaria de|gostaria|me ve|me manda|manda|pode ser|me traz|traz|coloca|adiciona|anota|tambem|numero|num|item|opcao|por favor|pfv|pf|isso)\b/g
+const ORDER_FILLER_RE = /\b(me da|me de|oxi|ta|ok|okay|beleza|blz|entao|certo|hmm|hum|tudo bem|bom|quero|queria|vou querer|gostaria de|gostaria|me ve|me manda|manda|pode ser|me traz|traz|coloca|adiciona|anota|tambem|numero|num|item|opcao|por favor|pfv|pf|isso)\b/g
 const ARTICLE_RE = /(^|\s)(a|o|as|os|n|no|nº)(?=\s|$)/g
 
 /**
@@ -1251,6 +1355,35 @@ function halfPrice (tenant: TenantConfig, a: Product, b: Product, sizeName?: str
 /** Produto que representa a promoção (nome ou descrição com "promoção"/"combo"). */
 function promoProduct (products: Product[]): Product | undefined {
   return products.find(p => PROMO_RE.test(normalize(`${p.name} ${p.description ?? ''}`)))
+}
+
+/** Variável do Conhecimento do cliente (ex.: formas_pagamento, chave_pix). */
+function tenantVar (tenant: TenantConfig, key: string): string {
+  return tenant.knowledge?.variables?.[key]?.trim() ?? ''
+}
+
+/** Variável que é só um valor em dinheiro ("R$ 5,00", "30") — texto livre não conta. */
+function moneyVar (tenant: TenantConfig, key: string): number {
+  const m = /^(?:r\$\s*)?(\d+(?:[.,]\d{1,2})?)$/i.exec(tenantVar(tenant, key))
+  return m ? Number(m[1].replace(',', '.')) : 0
+}
+
+function paymentMethod (bare: string): string | undefined {
+  if (/\bpix\b/.test(bare)) return 'Pix'
+  if (/\bdebito\b/.test(bare)) return 'Cartão de débito'
+  if (/\bcredito\b/.test(bare)) return 'Cartão de crédito'
+  if (/\b(cartao|maquininha|maquina)\b/.test(bare)) return 'Cartão'
+  if (/\b(dinheiro|especie|cash|troco)\b/.test(bare)) return 'Dinheiro'
+  return undefined
+}
+
+function acceptsPayment (methods: string, method: string): boolean {
+  const m = normalize(methods)
+  if (method === 'Pix') return m.includes('pix')
+  if (method === 'Cartão de débito') return m.includes('debito')
+  if (method === 'Cartão de crédito') return m.includes('credito')
+  if (method === 'Cartão') return /cartao|credito|debito/.test(m)
+  return m.includes('dinheiro')
 }
 
 /** Troca as palavras do cliente pelos termos do cardápio ("coca" -> "refrigerante"). */

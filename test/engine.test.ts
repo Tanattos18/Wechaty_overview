@@ -61,7 +61,9 @@ describe('Engine', () => {
     await t.say('2')
     assert.match((await t.say('finalizar'))[0], /no nome de \*Maria\*/)
     assert.match((await t.say('Joana'))[0], /Prazer, Joana!.*endereço/s)
-    const [summary] = await t.say('Rua A, 10')
+    assert.match((await t.say('Rua A, 10'))[0], /Como vai ser o pagamento/)
+    const [summary] = await t.say('pix')
+    assert.match(summary, /Pagamento: Pix/)
     assert.match(summary, /Total: R\$\s?110,50/)
     assert.match(summary, /Posso confirmar\?/)
     const [done] = await t.say('sim')
@@ -78,6 +80,7 @@ describe('Engine', () => {
   it('"retirar" no endereço vira retirada no local', async () => {
     await t.say('oi'); await t.say('1'); await t.say('1'); await t.say('finalizar'); await t.say('Ana')
     await t.say('vou buscar ai')
+    await t.say('cartão')
     await t.say('sim')
     assert.equal(t.store.listOrders('loja')[0].address, 'Retirada no local')
   })

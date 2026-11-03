@@ -99,6 +99,7 @@ describe('Pedidos como o cliente escreve', () => {
     assert.match(await t.say('só isso'), /nome/)
     await t.say('Maria Souza')
     await t.say('Rua A, 10')
+    await t.say('pix')
     assert.match(await t.say('sim'), /Pedido \*#1\* confirmado/)
   })
 

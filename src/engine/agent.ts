@@ -111,12 +111,22 @@ Jeito de atender:
 - Responda tudo o que o cliente perguntou na mensagem, e ajude a vender: sugira produtos do cardápio quando fizer sentido, sem insistir.
 - Use SOMENTE as informações abaixo. Nunca invente preço, produto, prazo, promoção, endereço ou política. Se não souber, diga que não tem essa informação agora, ajude com o que souber e use a ferramenta informacao_nao_cadastrada. Não chame atendente só por isso.
 
+Ordem do atendimento:
+1. Início (contato): cumprimente pelo período do dia e pelo nome, diga de onde fala e pergunte como pode ajudar. Pode citar a promoção do dia, se houver.
+2. Meio (conversa): tire dúvidas, mostre o cardápio quando pedirem, ajude a escolher e anote os itens. Depois de anotar, pergunte só se quer mais alguma coisa.
+3. Fim (fechamento), só quando o cliente disser que terminou, nesta ordem e um passo por mensagem (pule o que ele já informou):
+   a) confira o pedido (ver_pedido) e o pedido mínimo, se houver;
+   b) confirme o nome;
+   c) entrega ou retirada — se entrega, endereço com rua, número e bairro;
+   d) forma de pagamento (se for dinheiro, pergunte o troco);
+   e) guarde com dados_entrega e mostre o resumo: itens, subtotal, taxa de entrega (se houver), total, nome, entrega e pagamento — e pergunte se pode confirmar;
+   f) só depois do "sim": confirmar_pedido, e informe o número do pedido, o tempo de entrega e, se for Pix, a chave Pix.
+
 Pedidos (sempre pelas ferramentas — o sistema calcula preços e total):
 - Cliente quer algo → chame adicionar_item na hora, um item por chamada (aceita o nome ou o número do cardápio). Só pergunte o tamanho se o produto tiver "tamanhos:" no cardápio ou se a ferramenta responder FALTA TAMANHO; sem isso, anote direto, sem perguntar tamanho. Confirme o que anotou usando o resultado da ferramenta.
 - Antes de dizer o que está no pedido, confie no resultado das ferramentas (ou chame ver_pedido), nunca na memória.
 - Pergunta não é pedido: só anote quando o cliente pedir.
-- Depois de anotar, pergunte só se quer mais alguma coisa. Peça os dados de entrega apenas quando o cliente disser que terminou, e não repita pedidos de dados que ele já deu.
-- Para fechar: confirme o nome, peça o endereço de entrega (ou se vai retirar) e a forma de pagamento, guarde com dados_entrega, mostre o resumo (itens, total, entrega; se as informações da empresa tiverem taxa de entrega, mostre a taxa e o total com ela) e pergunte se pode confirmar. Só chame confirmar_pedido depois do "sim" do cliente, e então informe o número do pedido.
+- Não repita pedidos de dados que o cliente já deu. Use os totais que as ferramentas devolvem.
 - Mudanças: remover_item, ou adicionar_item de novo. Desistiu: cancelar_pedido.
 - Chame chamar_atendente se o cliente pedir uma pessoa, reclamar, estiver insatisfeito, ou em questão de saúde (alergia, restrição alimentar). Depois disso não diga mais nada além de avisar que alguém da equipe vai responder.
 
@@ -161,7 +171,10 @@ export function agentHistory (conv: Conversation): AgentRequest['messages'] {
 
 /** Agente pelo OpenRouter (API compatível com OpenAI, com ferramentas). */
 export function createOpenRouterAgent (apiKey: string, models: string[]): AgentRunner {
+  // Cota acabou (429): para de tentar por um tempo — enquanto isso o bot responde pelas regras
+  let pausedUntil = 0
   return async ({ system, messages, tools, run }) => {
+    if (Date.now() < pausedUntil) throw new Error('IA em pausa: cota do OpenRouter esgotada')
     const msgs: Record<string, unknown>[] = [{ role: 'system', content: system }, ...messages]
     for (let round = 0; round < MAX_ROUNDS; round++) {
       const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
@@ -181,6 +194,11 @@ export function createOpenRouterAgent (apiKey: string, models: string[]): AgentR
       const data = await res.json().catch(() => ({})) as {
         choices?: { message?: { content?: string | null; tool_calls?: { id: string; function: { name: string; arguments?: string } }[] } }[]
         error?: { message?: string }
+      }
+      if (res.status === 429) {
+        const daily = /per-day/i.test(data.error?.message ?? '')
+        pausedUntil = Date.now() + (daily ? 30 : 1) * 60_000
+        console.error(`[ia] cota do OpenRouter esgotada${daily ? ' (limite diário dos modelos grátis — com crédito na conta o limite sobe)' : ''}; usando as regras por ${daily ? 30 : 1} min`)
       }
       if (!res.ok) throw new Error(`OpenRouter ${res.status}: ${data.error?.message ?? 'erro'}`)
       const message = data.choices?.[0]?.message

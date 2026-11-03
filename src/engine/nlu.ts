@@ -17,7 +17,7 @@ const INTENTS: [Intent, RegExp][] = [
   ['bye', /\b(tchau|ate mais|ate logo|ate amanha|falou|flw|bye|so isso)\b/],
   ['price', /\b(quanto|preco|precos|valor|valores|custa|custam|sai por|ta quanto)\b/],
   ['catalog', /\b(cardapio|catalogo|produtos|sabores|o que (voces |vcs |vc )?(tem|vende|vendem)|quais (as )?opcoes|lista de)\b/],
-  ['order', /\b(quero|queria|quer[oi]a?|gostaria de (pedir|comprar)|pedir|fazer (um )?pedido|encomendar|comprar|me (ve|manda|traz))\b/],
+  ['order', /\b(quero|queria|quer[oi]a?|gostaria de (pedir|comprar)|pedir|fazer (um )?pedido|encomendar|comprar|me (ve|manda|traz|da|de|desce))\b/],
   ['hours', /\b(horario|horarios|que horas|abre|abrem|aberto|aberta|abrir|fecha|fecham|fechado|funciona|funcionam|funcionamento|expediente|feriado)\b/],
   ['address', /\b(endereco|onde (fica|ficam|voces ficam|e)|localizacao|como (eu )?chego|mapa|ponto de referencia)\b/],
   ['delivery', /\b(entrega|entregam|entregar|delivery|frete|taxa|motoboy|demora|tempo de entrega|prazo|retirar|retirada|buscar)\b/],

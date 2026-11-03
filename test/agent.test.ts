@@ -100,7 +100,8 @@ describe('IA funcionária', () => {
     assert.equal(order.customerName, 'Maria')
     assert.equal(order.address, 'Rua A, 10')
     assert.equal(order.payment, 'Pix')
-    assert.equal(order.total, 105.8)
+    assert.equal(order.total, 110.8) // 105,80 + taxa de entrega de R$ 5,00
+    assert.equal(order.deliveryFee, 5)
     assert.match(seen[2].results[1], /pedido #1 registrado/)
     assert.equal(t.conv().cart.length, 0)
   })

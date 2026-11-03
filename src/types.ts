@@ -120,6 +120,7 @@ export type ChatState =
   | 'catalog'
   | 'checkout_name'
   | 'checkout_address'
+  | 'checkout_payment'
   | 'checkout_confirm'
   | 'human'
 
@@ -150,7 +151,7 @@ export interface Conversation {
   channel: Channel
   state: ChatState
   cart: CartItem[]
-  checkout: { name?: string; address?: string; payment?: string; addressTries?: number }
+  checkout: { name?: string; address?: string; payment?: string; addressTries?: number; paymentTries?: number; askChange?: boolean }
   humanSince?: string
   needsAgent: boolean
   /** Mensagens seguidas que o bot não entendeu. */
@@ -185,6 +186,8 @@ export interface Order {
   address: string
   /** Forma de pagamento informada na conversa. */
   payment?: string
+  /** Taxa de entrega somada ao total (quando cadastrada como valor). */
+  deliveryFee?: number
   items: CartItem[]
   total: number
   status: OrderStatus
